@@ -16,8 +16,10 @@ Node.js/Express/TypeScript modular monolith API. See the repo root [`README.md`]
 - `src/api/v1/` — the versioned route-mount point.
 - `src/modules/users/` — the `User` model + repository + service. Other modules depend on `UsersService`, never the repository directly.
 - `src/modules/auth/` — Identity & Access Management: registration, email verification, login, refresh-token rotation, logout, password reset, RBAC (`authenticate`/`requireRole`). See `docs/ARCHITECTURE.md` §6 for the full design.
+- `src/modules/audit/` — `AuditLog` model/repository, extracted out of `modules/auth/` in the Menu phase once a second module (`menu`) needed to write audit entries. `AuditLogService` is the sole public interface — every module writes through it, never `AuditLogRepository` directly. See `docs/ARCHITECTURE.md` §3.1's "`modules/audit`" note.
 - `src/modules/canteens/` — the first business/domain module: full CRUD + soft delete + status toggle, admin/super_admin-only mutations, student/kitchen_staff view-only, `authenticate`/`requireRole` consumed from `modules/auth` (never modified).
-- `src/modules/` (remaining folders: `orders`, `restaurants`, ...) — empty scaffold from the original marketplace sketch; likely superseded by the campus-canteen direction `canteens` confirms (see `docs/DATABASE_DESIGN.md`'s scope note), not yet reconciled.
+- `src/modules/menu/` — categories and items for a canteen's menu (`MenuCategory` + `MenuItem`, two sibling entities of one module — see `docs/ARCHITECTURE.md` §3.1's note on why they're allowed to depend on each other's repository). Admin/super_admin-only mutations, any authenticated role can read. Every mutation writes an audit log via `modules/audit`.
+- `src/modules/` (remaining folders: `orders`, `restaurants`, ...) — empty scaffold from the original marketplace sketch; likely superseded by the campus-canteen direction `canteens`/`menu` confirm (see `docs/DATABASE_DESIGN.md`'s scope note), not yet reconciled.
 
 ## Common commands
 
@@ -36,6 +38,8 @@ npm run test:coverage          # jest --coverage
 - `GET /api-docs` — Swagger UI (every module below documents itself via `@openapi` JSDoc comments on its route definitions — see e.g. `modules/canteens/canteens.routes.ts`).
 - `POST /api/v1/auth/register`, `/verify-email`, `/login`, `/refresh`, `/logout`, `/forgot-password`, `/reset-password`, `GET /api/v1/auth/me`.
 - `POST /api/v1/canteens`, `GET /api/v1/canteens`, `GET /api/v1/canteens/:id`, `PUT /api/v1/canteens/:id`, `DELETE /api/v1/canteens/:id` (soft delete), `PATCH /api/v1/canteens/:id/status`.
+- `POST /api/v1/canteens/:canteenId/categories`, `GET /api/v1/canteens/:canteenId/categories`, `GET /api/v1/categories/:id`, `PUT /api/v1/categories/:id`, `DELETE /api/v1/categories/:id` (soft delete, `?force=true` cascades to active items), `PATCH /api/v1/categories/:id/reorder`.
+- `POST /api/v1/canteens/:canteenId/menu-items`, `GET /api/v1/canteens/:canteenId/menu-items` (filters: `search`, `categoryId`, `isVeg`, `isAvailable`, `isFeatured`, `priceMin`/`priceMax`, sort), `GET /api/v1/menu-items/:id`, `PUT /api/v1/menu-items/:id`, `DELETE /api/v1/menu-items/:id` (soft delete), `PATCH /api/v1/menu-items/:id/availability`, `PATCH /api/v1/menu-items/:id/featured`, `PATCH /api/v1/menu-items/:id/reorder`.
 
 ## Environment
 

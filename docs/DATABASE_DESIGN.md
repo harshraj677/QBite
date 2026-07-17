@@ -237,17 +237,19 @@ Backs the refresh-token rotation + reuse-detection design in [ARCHITECTURE.md §
 
 ### 2.13 `audit_logs`
 
-Security/forensics record for every auth event — see [ARCHITECTURE.md §6](./ARCHITECTURE.md#6-authentication-flow). Deliberately **not** TTL-indexed, unlike the three collections above — this is a compliance record, not ephemeral session state; retention is an operational decision, not an automatic expiry.
+Security/forensics record — originally auth-only, now shared across modules (see the Menu-phase extraction note below and [ARCHITECTURE.md §3.1](./ARCHITECTURE.md#31-pattern-modular-monolith)). Deliberately **not** TTL-indexed, unlike the three collections above — this is a compliance record, not ephemeral session state; retention is an operational decision, not an automatic expiry.
+
+**Module ownership (updated, Menu phase):** the model/repository/types moved from `modules/auth/` to their own `modules/audit/`, with `AuditLogService` as the sole public interface — `auth` and `menu` both write through it now. Collection name, schema, and every field below are unchanged by the move; only which module owns the code changed. See [ARCHITECTURE.md §3.1](./ARCHITECTURE.md#31-pattern-modular-monolith) for the full rationale.
 
 | Field | Type | Notes |
 |---|---|---|
 | `_id` | ObjectId | |
 | `actorId` | ObjectId? (ref `users`) | Nullable — e.g. a failed login against an unknown identifier has no known user. Indexed. |
 | `actorRole` | Enum? | Snapshot of the role at the time of the event. |
-| `action` | Enum | Closed set (`auth.register`, `auth.login.success`, `auth.login.failure`, `auth.token.reuse_detected`, ...) — not a free-form string, so a typo can't silently create an untracked action name. Indexed. |
+| `action` | Enum | Closed set, namespaced per producing module (`auth.register`, `auth.login.success`, `menu_category.created`, `menu_item.availability_updated`, ...) — not a free-form string, so a typo can't silently create an untracked action name. Indexed. |
 | `success` | Boolean | |
 | `ipAddress` / `userAgent` | String? | |
-| `metadata` | Mixed | Structured context (e.g. `{ reason: 'invalid_password' }`) — never a password or token value. |
+| `metadata` | Mixed | Structured context (e.g. `{ reason: 'invalid_password' }`, `{ categoryId, canteenId }`) — never a password or token value. |
 | `createdAt` | Date | Indexed. |
 
 ### 2.14 `canteens`
@@ -269,6 +271,50 @@ The first collection built for the campus-canteen product direction confirmed by
 | `createdBy` | ObjectId (ref `users`) | Always the authenticated caller — never client-supplied, per [ARCHITECTURE.md §9.1](./ARCHITECTURE.md#91-server-is-the-source-of-truth). |
 | `isDeleted` / `deletedAt` / `deletedBy` | Boolean / Date? / ObjectId? | Soft delete — every read path (`findById`, `findAll`) filters `isDeleted: false` unconditionally; there is no "include deleted" query path. |
 | `createdAt` / `updatedAt` | Date | |
+
+### 2.15 `menu_categories`
+
+Owned by `modules/menu/` (Menu phase). Every category belongs to exactly one canteen — `canteenId` is required, never optional — and category names are unique *within* a canteen, not globally (two canteens can each have a "Snacks" category).
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `canteenId` | ObjectId (ref `canteens`) | |
+| `name` | String | Display name, original casing preserved. |
+| `nameKey` | String | `name`, trimmed + lowercased — same pattern as `canteens.nameKey`. **Compound unique indexed with `canteenId`** (`{canteenId, nameKey}`), not indexed alone. Internal only, never returned by the API. |
+| `description` | String? | |
+| `displayOrder` | Number | Default `0`. Client-facing sort position among a canteen's categories. Changed only via `PATCH /categories/:id/reorder` — never directly through the edit endpoint (`PUT`) — so every sibling's order is always recomputed together and two categories can never end up sharing a position. |
+| `isActive` | Boolean | Default `true`. A business-visibility toggle (e.g. hide a seasonal category without deleting it) — distinct from `isDeleted`, same pairing as `canteens.isOpen` vs. `isDeleted`. |
+| `createdBy` / `updatedBy` | ObjectId (ref `users`) / ObjectId? (ref `users`) | `createdBy` always the authenticated caller; `updatedBy` set on every mutation including restore. |
+| `isDeleted` / `deletedAt` / `deletedBy` | Boolean / Date? / ObjectId? | Soft delete — same convention as `canteens`. Deleting a category with active (non-deleted) items is rejected with 409 unless `force=true`, in which case its items are cascade-soft-deleted in the same operation (see `menu_items` below). |
+| `createdAt` / `updatedAt` | Date | |
+
+### 2.16 `menu_items`
+
+Owned by `modules/menu/` (Menu phase) — **not** the same collection as the stale §2.3 `menu_items` sketch above, which predates the campus-canteen pivot (see the scope note at the top of §2) and was never implemented. This is the real, implemented collection. Every item belongs to exactly one category (and, denormalized, the category's canteen) — item names are unique *within* a category, not globally or even within a canteen.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `canteenId` | ObjectId (ref `canteens`) | Denormalized from the owning category at creation time — avoids a join on every menu-listing query. Kept in sync only in the sense that an item can never be moved to a category in a different canteen (`MENU_ITEM_CANTEEN_MISMATCH`); `canteenId` itself never changes after creation. |
+| `categoryId` | ObjectId (ref `menu_categories`) | Editable via `PUT /menu-items/:id`, but only to another category within the *same* canteen. |
+| `name` | String | Display name, original casing preserved. |
+| `nameKey` | String | `name`, trimmed + lowercased. **Compound unique indexed with `categoryId`** (`{categoryId, nameKey}`). Internal only. |
+| `description` | String? | |
+| `image` | String? | URL. |
+| `price` | Number | **Integer, paise** — see §6's money convention. `min: 1` at the schema layer; `positive()` at the Zod layer. |
+| `preparationTimeMinutes` | Number | Integer, `min: 1`. |
+| `isVeg` | Boolean | Required — no default; every item must declare it explicitly. |
+| `isAvailable` | Boolean | Default `true`. Changed only via `PATCH /menu-items/:id/availability` (atomic). Turning it off also clears `isFeatured` in the same write — see the next field. |
+| `isFeatured` | Boolean | Default `false`. Changed only via `PATCH /menu-items/:id/featured`. An unavailable item can never be featured: setting `isFeatured: true` while `isAvailable: false` is rejected (422); turning `isAvailable` off force-clears `isFeatured` atomically rather than leaving a momentarily-invalid combination observable. |
+| `allergens` | String[] | Default `[]`. Free-form short strings (max 20 per item), not a closed enum — allergen naming isn't standardized enough across canteens to model as one. |
+| `calories` | Number? | Integer, `min: 0`. |
+| `displayOrder` | Number | Default `0`. Same "only via the dedicated reorder endpoint" rule as `menu_categories.displayOrder`, scoped to siblings within the same category. |
+| `createdBy` / `updatedBy` | ObjectId (ref `users`) / ObjectId? (ref `users`) | Same convention as `menu_categories`. |
+| `isDeleted` / `deletedAt` / `deletedBy` | Boolean / Date? / ObjectId? | Soft delete — same convention as `menu_categories`/`canteens`. |
+| `createdAt` / `updatedAt` | Date | |
+
+**Indexes:** `{categoryId, nameKey}` unique; `{categoryId, isDeleted, displayOrder}` (a category's items, in order); `{canteenId, isDeleted}` (a canteen's items, filtered by the rest of the query — `isVeg`/`isAvailable`/`isFeatured`/price-range/search are applied after this index narrows to the canteen).
 
 ---
 
