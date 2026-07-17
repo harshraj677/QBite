@@ -316,6 +316,50 @@ Owned by `modules/menu/` (Menu phase) — **not** the same collection as the sta
 
 **Indexes:** `{categoryId, nameKey}` unique; `{categoryId, isDeleted, displayOrder}` (a category's items, in order); `{canteenId, isDeleted}` (a canteen's items, filtered by the rest of the query — `isVeg`/`isAvailable`/`isFeatured`/price-range/search are applied after this index narrows to the canteen).
 
+### 2.17 `orders`
+
+Owned by `modules/orders/` (Order Management phase) — **supersedes** the stale §2.4 `orders` sketch above, not a reconciliation of it: that sketch references `restaurants`, `deliveryPartnerId`, `tip`, `couponCode`, and a `PAYMENT_PENDING → ... → OUT_FOR_DELIVERY → DELIVERED` state machine, none of which apply to a campus canteen pickup flow (no delivery leg, no coupon module, no marketplace payment-first gate). This is the real, implemented collection.
+
+No soft-delete fields and no `createdBy` — deliberate. The phase spec requires "immutable order history," so orders are never deleted, only transitioned to a terminal status (`completed`/`cancelled`); the placing student is already captured by `studentId`, so there's no separate creating-actor to track the way `canteens`/`menu_items` need `createdBy` for staff-managed catalog entities.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `orderNumber` | String | Human-readable, unique indexed. Format `QB-<year>-<8-char hex>` (e.g. `QB-2026-A1B2C3D4`) — randomly generated and retried on the rare collision, not sequential; no counter/sequence collection exists for this phase's volume. |
+| `canteenId` | ObjectId (ref `canteens`) | |
+| `studentId` | ObjectId (ref `users`) | The placing student — doubles as the "createdBy" this collection otherwise omits. |
+| `status` | Enum | `pending \| accepted \| preparing \| ready \| completed \| cancelled`. Forward pipeline plus one terminal side branch — see `orders.constants.ts`'s `FORWARD_TRANSITIONS`. `completed`/`cancelled` are immutable; nothing on an order in either state is ever written again. |
+| `paymentStatus` | Enum | `pending \| paid \| failed \| refunded`. Independent of `status` — no payment gateway is integrated yet (Razorpay env vars exist, no `payments` module built), so this is write-once at creation and nothing in this module ever transitions it. Reserved for a future Payments module. |
+| `paymentMethod` | Enum | `cash \| online`. `cash` = settled at the pickup counter; `online` is a placeholder for the future Razorpay integration — no gateway call happens either way in this phase. |
+| `subtotal` / `tax` / `discount` / `totalAmount` | Number (integer, paise) | Server-computed only — see §6's money convention. `subtotal` = sum of every `order_items.totalPrice`. `tax` = `subtotal * ORDER_TAX_RATE_PERCENT / 100`, and that rate is currently **0** — no tax/GST policy is documented anywhere in this project (checked QBite_SRS_PRD.md and this file), so a real number was not invented; the field is fully wired up for when one is supplied. `discount` is always 0 — no coupon module exists yet. `totalAmount = subtotal + tax - discount`. The client can send none of these; `orders.validation.ts`'s `createOrderSchema` simply has no field for them. |
+| `pickupToken` | String | Unique indexed, 6-digit numeric, plain (not hashed). Shown by the student and read back by kitchen staff at the pickup counter — same threat model as a queue-number ticket, not a password-reset token. |
+| `estimatedReadyTimeMinutes` | Number | `max()` of the ordered items' `preparationTimeMinutes`, not the sum — a kitchen prepares an order's items in parallel, not sequentially. |
+| `notes` | String? | Order-level note from the student (e.g. "no napkins needed"). |
+| `acceptedAt` / `preparingAt` / `readyAt` / `completedAt` | Date? | Stamped by `PATCH /orders/:id/status` as the order reaches each stage. |
+| `cancelledAt` / `cancellationReason` | Date? / String? | Stamped by `PATCH /orders/:id/cancel`. |
+| `createdAt` / `updatedAt` | Date | |
+
+**Indexes:** `{studentId, createdAt: -1}` (a student's own order history — `GET /students/me/orders`); `{canteenId, status, createdAt: -1}` (the kitchen queue view, filterable by status — `GET /canteens/:canteenId/orders`); `orderNumber` unique; `pickupToken` unique.
+
+### 2.18 `order_items`
+
+Owned by `modules/orders/`. One document per line item on an order — a separate collection referenced by `orderId`, not an embedded array on `orders` (a deliberate departure from the embedded-snapshot pattern §3.3 below describes for the old marketplace sketch; this phase's spec calls for `OrderItem` as its own model with its own `id`, and this collection follows that literally).
+
+The single most important field is `itemSnapshot` — frozen at order-creation time and never re-read from `menu_items` afterward. If a canteen renames or reprices a menu item tomorrow, every past order must still show what the student actually saw and paid for.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `orderId` | ObjectId (ref `orders`) | |
+| `menuItemId` | ObjectId (ref `menu_items`) | Live reference for traceability only — never re-queried to render an existing order; every display value comes from `itemSnapshot` instead. |
+| `quantity` | Number | Integer, `min: 1`. |
+| `unitPrice` / `totalPrice` | Number (integer, paise) | Query/aggregation-friendly copies of `itemSnapshot.unitPrice` (and `unitPrice * quantity`) — written once, together, at creation, and never diverge from the snapshot. |
+| `notes` | String? | Per-item note (e.g. "extra spicy"). |
+| `itemSnapshot.itemId` / `.itemName` / `.categoryName` / `.image` / `.unitPrice` / `.isVeg` | Embedded, `_id: false` | The frozen copy — see above. |
+| `createdAt` / `updatedAt` | Date | |
+
+**Indexes:** `{orderId}` — the only query pattern this collection serves is "every line item for order X".
+
 ---
 
 ## 3. Relationships — Embedding vs. Referencing Rationale

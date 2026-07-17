@@ -37,6 +37,10 @@ export const AUDIT_ACTIONS = [
   'menu_item.availability_updated',
   'menu_item.featured_updated',
   'menu_item.reordered',
+  // order
+  'order.created',
+  'order.status_updated',
+  'order.cancelled',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

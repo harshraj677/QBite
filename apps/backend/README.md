@@ -19,7 +19,8 @@ Node.js/Express/TypeScript modular monolith API. See the repo root [`README.md`]
 - `src/modules/audit/` — `AuditLog` model/repository, extracted out of `modules/auth/` in the Menu phase once a second module (`menu`) needed to write audit entries. `AuditLogService` is the sole public interface — every module writes through it, never `AuditLogRepository` directly. See `docs/ARCHITECTURE.md` §3.1's "`modules/audit`" note.
 - `src/modules/canteens/` — the first business/domain module: full CRUD + soft delete + status toggle, admin/super_admin-only mutations, student/kitchen_staff view-only, `authenticate`/`requireRole` consumed from `modules/auth` (never modified).
 - `src/modules/menu/` — categories and items for a canteen's menu (`MenuCategory` + `MenuItem`, two sibling entities of one module — see `docs/ARCHITECTURE.md` §3.1's note on why they're allowed to depend on each other's repository). Admin/super_admin-only mutations, any authenticated role can read. Every mutation writes an audit log via `modules/audit`.
-- `src/modules/` (remaining folders: `orders`, `restaurants`, ...) — empty scaffold from the original marketplace sketch; likely superseded by the campus-canteen direction `canteens`/`menu` confirm (see `docs/DATABASE_DESIGN.md`'s scope note), not yet reconciled.
+- `src/modules/orders/` — full order lifecycle (`Order` + `OrderItem`, populated into the previously-empty `orders/` scaffold slot). Students place/view/cancel their own orders; kitchen staff/admin/super_admin view a canteen's orders and advance status; a student may only cancel their own order while `pending`. Server computes all pricing from live menu-item prices — never from the client. See `docs/ARCHITECTURE.md` §3.1's `modules/orders` note for the no-transaction write ordering and the two-endpoint status/cancel split.
+- `src/modules/` (remaining empty-scaffold folders: `admin`, `catalog`, `delivery`, `notifications`, `payments`, `restaurants`, `reviews`) — leftover from the original marketplace sketch; not yet reconciled with the campus-canteen direction (see `docs/DATABASE_DESIGN.md`'s scope note).
 
 ## Common commands
 
@@ -40,6 +41,7 @@ npm run test:coverage          # jest --coverage
 - `POST /api/v1/canteens`, `GET /api/v1/canteens`, `GET /api/v1/canteens/:id`, `PUT /api/v1/canteens/:id`, `DELETE /api/v1/canteens/:id` (soft delete), `PATCH /api/v1/canteens/:id/status`.
 - `POST /api/v1/canteens/:canteenId/categories`, `GET /api/v1/canteens/:canteenId/categories`, `GET /api/v1/categories/:id`, `PUT /api/v1/categories/:id`, `DELETE /api/v1/categories/:id` (soft delete, `?force=true` cascades to active items), `PATCH /api/v1/categories/:id/reorder`.
 - `POST /api/v1/canteens/:canteenId/menu-items`, `GET /api/v1/canteens/:canteenId/menu-items` (filters: `search`, `categoryId`, `isVeg`, `isAvailable`, `isFeatured`, `priceMin`/`priceMax`, sort), `GET /api/v1/menu-items/:id`, `PUT /api/v1/menu-items/:id`, `DELETE /api/v1/menu-items/:id` (soft delete), `PATCH /api/v1/menu-items/:id/availability`, `PATCH /api/v1/menu-items/:id/featured`, `PATCH /api/v1/menu-items/:id/reorder`.
+- `POST /api/v1/canteens/:canteenId/orders` (student places an order), `GET /api/v1/orders/:id`, `GET /api/v1/students/me/orders` (student's own history, filters: `orderNumber`, `status`, `dateFrom`/`dateTo`, sort), `GET /api/v1/canteens/:canteenId/orders` (kitchen queue view, adds a `studentId` filter), `PATCH /api/v1/orders/:id/status` (forward pipeline only), `PATCH /api/v1/orders/:id/cancel`.
 
 ## Environment
 

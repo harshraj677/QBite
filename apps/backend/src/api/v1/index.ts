@@ -4,6 +4,7 @@ import { authRouter } from '@modules/auth/auth.routes';
 import { canteensRouter } from '@modules/canteens/canteens.routes';
 import { menuCategoriesRouter } from '@modules/menu/menu-categories.routes';
 import { menuItemsRouter } from '@modules/menu/menu-items.routes';
+import { ordersRouter } from '@modules/orders/orders.routes';
 
 /**
  * API v1 mount point (docs/API_SPECIFICATION.md §7 — URI-based
@@ -32,3 +33,4 @@ v1Router.use('/auth', authRouter);
 v1Router.use('/canteens', canteensRouter);
 v1Router.use('/', menuCategoriesRouter);
 v1Router.use('/', menuItemsRouter);
+v1Router.use('/', ordersRouter);
