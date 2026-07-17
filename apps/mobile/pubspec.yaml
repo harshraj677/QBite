@@ -27,13 +27,22 @@ dependencies:
   freezed_annotation: ^2.4.4
   json_annotation: ^4.9.0
 
-  # Environment variable loading — wired in Phase 3, dependency staged now
+  # Environment variable loading (flavors: development/staging/production)
   flutter_dotenv: ^5.2.1
 
   # Typography
-  google_fonts: ^6.2.1
+  google_fonts: ^6.3.3
 
+  # Icons
   cupertino_icons: ^1.0.8
+
+  # Logging
+  logger: ^2.7.0
+
+  # Localization
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:
@@ -50,3 +59,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
+
+  # Per-flavor env files (see lib/config/env.dart, lib/main_*.dart).
+  # Not committed (see .gitignore) — copy from .env.example first, per
+  # README.md / scripts/setup.sh.
+  assets:
+    - .env.development
+    - .env.staging
+    - .env.production
