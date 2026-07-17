@@ -50,19 +50,25 @@ MongoDB is a document database — this is not a normalized relational schema. R
 
 ## 2. Collections
 
+> **Scope note (IAM phase):** `users` below reflects the schema actually implemented for the Identity & Access Management module — `role` is now `student | kitchen_staff | admin | super_admin` with USN/college-email fields, not the `customer | restaurant_owner | delivery_partner | admin` marketplace roles the rest of this document (restaurants, orders, delivery_partners) was originally sketched around. That's a real product-direction question (campus canteen vs. multi-restaurant marketplace) outside this phase's scope — flagged here so the inconsistency is visible in the docs, not just in conversation history. Sections 2.2-2.9 below are unchanged from the original marketplace sketch and have **not** been validated against the new role model.
+
 ### 2.1 `users`
 
 | Field | Type | Notes |
 |---|---|---|
 | `_id` | ObjectId | |
-| `phone` | String | Unique, indexed. Primary login identifier. |
-| `email` | String? | Optional, unique if present. |
-| `passwordHash` | String? | Only set if email/password auth used; OTP-only users may not have one. |
-| `name` | String | |
-| `role` | Enum | `customer` \| `restaurant_owner` \| `delivery_partner` \| `admin` |
-| `addresses` | Array\<Embedded\> | `{ label, geoPoint, formattedAddress, isDefault }` |
-| `fcmTokens` | Array\<String\> | Multiple devices per user supported. |
+| `usn` | String? | University Seat Number. Unique when present (**sparse** index — only students have one), uppercase-normalized. |
+| `fullName` | String | |
+| `collegeEmail` | String | Unique, indexed, lowercase-normalized. Primary login identifier alongside `usn`. |
+| `phoneNumber` | String | Unique, indexed. |
+| `passwordHash` | String | bcrypt, 12 rounds (see [ARCHITECTURE.md §6](./ARCHITECTURE.md#6-authentication-flow)). `select: false` at the schema level — never returned by a default query. |
+| `role` | Enum | `student` \| `kitchen_staff` \| `admin` \| `super_admin`. Default `student`. Only `student` is ever created by the public registration endpoint — the other three require a privileged provisioning flow that doesn't exist yet. |
+| `isEmailVerified` | Boolean | Default `false`. Login is refused until `true`. |
 | `isActive` | Boolean | Soft-disable flag; disabled users fail auth, not deleted. |
+| `failedLoginAttempts` | Number | Reset to 0 on successful login or password reset. |
+| `lockedUntil` | Date? | Set once `failedLoginAttempts` reaches the lockout threshold; account login is refused until this passes. |
+| `lastLoginAt` | Date? | |
+| `passwordChangedAt` | Date? | Compared against a JWT's `iat` on every authenticated request — lets a password change invalidate outstanding access tokens without a token blacklist. |
 | `createdAt` / `updatedAt` | Date | Standard timestamps (Mongoose `timestamps: true`). |
 
 ### 2.2 `restaurants`
@@ -189,6 +195,61 @@ Role-extension document, kept separate from `users` rather than adding delivery-
 | `currentLocation` | GeoJSON Point | **2dsphere indexed** — nearest-partner queries. |
 | `rating` | Number | Denormalized aggregate. |
 
+### 2.10 `refresh_tokens`
+
+Backs the refresh-token rotation + reuse-detection design in [ARCHITECTURE.md §6](./ARCHITECTURE.md#6-authentication-flow). Only ever queried by the `auth` module — not referenced by any other module's collections.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `userId` | ObjectId (ref `users`) | Indexed. |
+| `tokenHash` | String | SHA-256 of the opaque refresh token — the raw token is never persisted. **Unique indexed.** |
+| `familyId` | String (UUID) | Groups every token produced by one login's rotation chain. Indexed. |
+| `expiresAt` | Date | **TTL indexed** — expired tokens are auto-deleted, not retained. |
+| `revokedAt` | Date? | Set on rotation (superseded), logout, reuse-detection, or password reset. |
+| `replacedByTokenHash` | String? | The next token in the rotation chain — audit trail for a family. |
+| `userAgent` / `ipAddress` | String? | Captured at issuance for session-tracking/forensics. |
+| `createdAt` | Date | |
+
+### 2.11 `verification_otps`
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `userId` | ObjectId (ref `users`) | Indexed together with `purpose`. |
+| `otpHash` | String | bcrypt (10 rounds) — never the plain 6-digit code. |
+| `purpose` | Enum | `email_verification` today; the enum exists so a future OTP purpose (e.g. phone verification) doesn't need a schema migration. |
+| `attempts` | Number | Capped at a max (5) in the service layer — further attempts are rejected without even checking the hash. |
+| `expiresAt` | Date | **TTL indexed.** |
+| `consumedAt` | Date? | Set once used — prevents replay of an already-consumed OTP. |
+| `createdAt` | Date | |
+
+### 2.12 `password_reset_tokens`
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `userId` | ObjectId (ref `users`) | Indexed. |
+| `tokenHash` | String | SHA-256 of a 256-bit random token — the raw token is never persisted. **Unique indexed.** |
+| `expiresAt` | Date | **TTL indexed.** |
+| `consumedAt` | Date? | Set once used. |
+| `createdAt` | Date | |
+
+### 2.13 `audit_logs`
+
+Security/forensics record for every auth event — see [ARCHITECTURE.md §6](./ARCHITECTURE.md#6-authentication-flow). Deliberately **not** TTL-indexed, unlike the three collections above — this is a compliance record, not ephemeral session state; retention is an operational decision, not an automatic expiry.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `actorId` | ObjectId? (ref `users`) | Nullable — e.g. a failed login against an unknown identifier has no known user. Indexed. |
+| `actorRole` | Enum? | Snapshot of the role at the time of the event. |
+| `action` | Enum | Closed set (`auth.register`, `auth.login.success`, `auth.login.failure`, `auth.token.reuse_detected`, ...) — not a free-form string, so a typo can't silently create an untracked action name. Indexed. |
+| `success` | Boolean | |
+| `ipAddress` / `userAgent` | String? | |
+| `metadata` | Mixed | Structured context (e.g. `{ reason: 'invalid_password' }`) — never a password or token value. |
+| `createdAt` | Date | Indexed. |
+
 ---
 
 ## 3. Relationships — Embedding vs. Referencing Rationale
@@ -228,8 +289,21 @@ Both have their own independent lifecycle (a payment can be refunded days later;
 
 | Collection | Index | Type | Purpose |
 |---|---|---|---|
-| `users` | `phone` | Unique | Login lookup, prevents duplicate accounts. |
-| `users` | `email` | Unique, sparse | Optional secondary login. |
+| `users` | `usn` | Unique, sparse | Login lookup by USN; sparse because only students have one. |
+| `users` | `collegeEmail` | Unique | Login lookup by email, registration uniqueness check. |
+| `users` | `phoneNumber` | Unique | Registration uniqueness check. |
+| `users` | `role` | Standard | Future role-scoped admin queries. |
+| `refresh_tokens` | `tokenHash` | Unique | Refresh/logout lookup. |
+| `refresh_tokens` | `userId` | Standard | "All sessions for this user" (password-reset revocation). |
+| `refresh_tokens` | `familyId` | Standard | Reuse-detection family revocation. |
+| `refresh_tokens` | `expiresAt` | **TTL** | Expired tokens auto-deleted. |
+| `verification_otps` | `{ userId: 1, purpose: 1 }` | Compound | Latest-active-OTP lookup. |
+| `verification_otps` | `expiresAt` | **TTL** | Expired OTPs auto-deleted. |
+| `password_reset_tokens` | `tokenHash` | Unique | Reset-token lookup. |
+| `password_reset_tokens` | `expiresAt` | **TTL** | Expired tokens auto-deleted. |
+| `audit_logs` | `actorId` | Standard | Per-user security history lookup. |
+| `audit_logs` | `action` | Standard | Filtering by event type (e.g. all lockouts). |
+| `audit_logs` | `createdAt` | Standard | Time-ordered queries — **no TTL**, per §2.13. |
 | `restaurants` | `location` | `2dsphere` | Radius-based discovery query — the single most performance-critical index in the system. |
 | `restaurants` | `{ status: 1, isOpen: 1 }` | Compound | Discovery query filters on both. |
 | `restaurants` | `cuisineTags` | Multikey | Cuisine filter. |

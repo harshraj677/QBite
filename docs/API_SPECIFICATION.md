@@ -111,10 +111,10 @@ Error codes are namespaced by domain so they're greppable and self-documenting: 
 
 ## 6. Authentication Strategy
 
-- **JWT bearer tokens**, issued per the flow defined in [ARCHITECTURE.md §6](./ARCHITECTURE.md#6-authentication-flow).
-- **Access token:** short-lived (15 min), sent on every request via `Authorization` header.
-- **Refresh token:** long-lived (30 days), rotated on every use, stored hashed server-side, revocable individually or "everywhere" (logout-all-devices).
-- **Role scopes enforced server-side per route**, declared explicitly at the route level (e.g. `requireRole('restaurant_owner')`) — never inferred implicitly from which frontend happens to be calling.
+- **JWT bearer tokens** for access; an **opaque, DB-tracked token** (not a JWT) for refresh — issued per the flow defined in [ARCHITECTURE.md §6](./ARCHITECTURE.md#6-authentication-flow).
+- **Access token:** short-lived (15 min) JWT, sent on every request via `Authorization: Bearer` header.
+- **Refresh token:** long-lived (30 days), rotated on every use with reuse-detection (a reused, already-rotated token revokes its entire token family), stored hashed (SHA-256) server-side. Revocable individually (`/auth/logout`), automatically as a family (reuse detection), or entirely for a user (`/auth/reset-password` revokes every session).
+- **Role scopes enforced server-side per route**, declared explicitly at the route level (e.g. `requireRole('admin', 'super_admin')`) — never inferred implicitly from which frontend happens to be calling.
 - **One exception to bearer-auth: the Razorpay webhook endpoint** (`POST /payments/webhook`). It carries no user JWT (Razorpay is calling the server directly) and is instead authenticated by verifying the request's HMAC-SHA256 signature against the shared webhook secret. This is a deliberate, explicitly-documented exception to the "everything requires a bearer token" rule — not an oversight, and it must remain the *only* such exception without an explicit architecture review.
 
 ---

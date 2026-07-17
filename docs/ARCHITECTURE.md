@@ -224,7 +224,8 @@ app/
 
 ### 4.3 Auth Handling (Web-Specific)
 
-- JWT stored in an **httpOnly, secure, SameSite cookie** (not `localStorage`) to reduce XSS token-theft exposure — a deliberate difference from the mobile app's secure-storage approach, appropriate to the web threat model.
+- **The refresh token**, specifically — not the access token — is what's stored in an **httpOnly, secure, SameSite cookie** (not `localStorage`), to reduce XSS token-theft exposure. The access token is short-lived (15 min) and kept in memory, attached to each request via `Authorization: Bearer`, the same as the mobile client — cookies aren't a natural fit for a stateless bearer token used identically across platforms. This corrects an earlier, vaguer version of this section that just said "JWT stored in a cookie" without distinguishing the two tokens.
+- Mobile has no equivalent cookie story with Dio/`flutter_secure_storage`, so the refresh token is *also* returned in the JSON response body — the backend delivers it both ways from the same endpoint, and each client uses whichever mechanism fits it. See [§6](#6-authentication-flow).
 - Middleware-level session check on every protected route before render.
 
 ---
@@ -245,20 +246,68 @@ app/
 
 ## 6. Authentication Flow
 
+Implemented by the `auth` + `users` modules (Identity & Access Management phase). Supersedes an earlier draft of this section that sketched a phone-OTP-*login* flow — the actual design is password-based login with OTP used only for one-time email verification at registration, per `docs/QBite_SRS_PRD.md`'s IAM requirements.
+
+### 6.1 Registration → Verification → Login
+
 ```
-1. Client requests OTP           → POST /auth/otp/request {phone}
-2. Server generates OTP, stores  → Redis, TTL 5 min, rate-limited per phone
-3. Client submits OTP            → POST /auth/otp/verify {phone, otp}
-4. Server verifies, issues       → access token (15 min) + refresh token (30 days)
-5. Refresh token stored          → hashed, in MongoDB, associated with device/session
-6. Client stores tokens          → secure storage (mobile) / httpOnly cookie (web)
-7. Subsequent requests           → Authorization: Bearer <access_token>
-8. On 401 (expired access token) → client calls /auth/refresh with refresh token
-9. Server validates refresh      → rotates it (old one invalidated, new one issued)
-10. Logout / logout-everywhere   → refresh token(s) revoked server-side
+1. POST /auth/register {usn, fullName, collegeEmail, phoneNumber, password}
+   → role is always "student" (never client-supplied — see §9.1)
+   → password hashed with bcrypt (12 rounds), account created with isEmailVerified: false
+   → a 6-digit OTP is generated, bcrypt-hashed (10 rounds), stored with a 10-minute expiry
+   → OTP emailed to collegeEmail (EmailService — see §6.5)
+2. POST /auth/verify-email {collegeEmail, otp}
+   → compares against the stored hash; wrong/expired/exhausted-attempts all return
+     the same generic error (enumeration resistance — see §6.4)
+   → on success: isEmailVerified: true. The account still cannot log in until this step.
+3. POST /auth/login {identifier, password}   — identifier is USN or collegeEmail
+   → checked, in this order, so a locked account never leaks whether the
+     supplied password happens to be correct: account lock status → password
+     match → email-verified → active
+   → on success: access token (JWT, 15 min) + refresh token (opaque random
+     string, 30 days) issued — see §6.2
 ```
 
-**Role determination:** the JWT payload carries `userId` and `role`, but **role is re-verified against the database on every sensitive action**, not trusted blindly from an old token — this protects against a role change (e.g., restaurant suspended) not taking effect until token expiry.
+### 6.2 Access Tokens vs. Refresh Tokens
+
+Two different token types for two different jobs, not the same mechanism twice:
+
+- **Access token** — a stateless JWT (`sub`, `role`), signed with `JWT_ACCESS_SECRET`, 15-minute expiry. Verified without a database hit (fast, scales horizontally with zero shared state) — except `middlewares` further up the request re-fetch the user anyway (see §6.3), so the "no DB hit" property is really about signature/expiry verification being cheap, not the full auth check being free.
+- **Refresh token** — an opaque, high-entropy random string (`crypto.randomBytes(32)`), **not a JWT**. Only its SHA-256 hash is ever stored (`refresh_tokens` collection, see `DATABASE_DESIGN.md` §2.10). This is what makes real revocation and a blacklist strategy possible at all — a stateless JWT refresh token can't be un-issued before it expires; a DB-tracked opaque one can.
+
+### 6.3 `authenticate` Middleware — Re-Verifies Against the Database Every Time
+
+The JWT payload carries `userId` and `role`, but **the user is re-fetched from MongoDB on every authenticated request** — role is never trusted blindly from the token. This is what makes a role change or account deactivation take effect within one request, not only after the old token expires. Two additional checks happen on every request beyond "is the signature valid":
+
+- `user.isActive` — a deactivated account's outstanding access tokens stop working immediately.
+- `user.passwordChangedAt` vs. the token's `iat` — a token issued *before* the user's last password change is rejected even though it hasn't expired yet. This is how a password reset achieves effective access-token revocation without needing a separate access-token blacklist (the refresh-token blacklist in §6.4 doesn't help here, since the access token is what's actually being presented).
+
+### 6.4 Refresh Rotation, Reuse Detection, and Revocation
+
+```
+POST /auth/refresh {refreshToken?}   — from httpOnly cookie (web) or body (mobile)
+  → hash the presented token, look up refresh_tokens by tokenHash
+  → if the matched record is already revoked: this is a REUSE of a token that
+    was already rotated past — treat as a compromise signal, revoke every
+    token sharing its familyId, force re-login on every device in that family
+  → otherwise: revoke the presented token (recording it as replaced by the
+    new one), issue a new access+refresh pair under the SAME familyId
+```
+
+Every login starts a new `familyId`; every `/auth/refresh` call continues the existing family. This is the OWASP-recommended rotation-with-reuse-detection pattern, not a homegrown scheme.
+
+**Revocation triggers**, beyond normal expiry:
+- `POST /auth/logout` — revokes the one presented token (single session/device). Always returns success regardless of whether the token was valid, so logout can't be used to probe token validity.
+- `POST /auth/reset-password` — revokes **every** refresh token for the user (all sessions, all devices) — a password reset is treated as a strong enough signal to kill any possibly-stolen session, not just the one being used to reset.
+- Reuse detection (above) — revokes the entire token family, not just the reused token.
+
+**Enumeration resistance:** wrong-password and unknown-identifier return the identical `INVALID_CREDENTIALS` error at login; `forgot-password` always returns the same generic response whether or not the email is registered; `verify-email` collapses "unknown email," "OTP expired," and "OTP wrong" into one generic error. Registration's uniqueness conflict (`EMAIL_ALREADY_REGISTERED` etc.) is the one accepted exception — a real user has to be told their email is taken.
+
+**Account lockout** is a second, independent layer from IP-based rate limiting (§3.2): 5 failed password attempts locks the *account* for 15 minutes regardless of source IP, which IP-based limiting alone can't stop (an attacker spreading attempts across many IPs).
+
+### 6.5 Email Delivery
+
+No email provider is chosen anywhere in this project's stack — `EmailService` is an interface (`modules/auth/email.service.ts`) with one real, working implementation today (`LoggingEmailService`, which logs the message via the structured logger instead of sending it), so the full registration/verification/reset flow is genuinely testable without a provider decision or credentials. Swapping in a real provider later means implementing `EmailService` once and changing where it's constructed — nothing about the auth flow itself changes.
 
 **Payment note (data-flow-adjacent to auth):** the same "never trust the client" principle governs payments — an order is only marked `paid` when Razorpay's signed webhook confirms it server-to-server, never from the client's post-payment callback alone (that callback only improves perceived UI latency, e.g. showing a "processing" state).
 
