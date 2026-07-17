@@ -50,7 +50,7 @@ MongoDB is a document database — this is not a normalized relational schema. R
 
 ## 2. Collections
 
-> **Scope note (IAM phase):** `users` below reflects the schema actually implemented for the Identity & Access Management module — `role` is now `student | kitchen_staff | admin | super_admin` with USN/college-email fields, not the `customer | restaurant_owner | delivery_partner | admin` marketplace roles the rest of this document (restaurants, orders, delivery_partners) was originally sketched around. That's a real product-direction question (campus canteen vs. multi-restaurant marketplace) outside this phase's scope — flagged here so the inconsistency is visible in the docs, not just in conversation history. Sections 2.2-2.9 below are unchanged from the original marketplace sketch and have **not** been validated against the new role model.
+> **Scope note (IAM phase, updated — Canteen phase):** `users` below reflects the schema actually implemented for the Identity & Access Management module — `role` is now `student | kitchen_staff | admin | super_admin` with USN/college-email fields, not the `customer | restaurant_owner | delivery_partner | admin` marketplace roles the rest of this document (restaurants, orders, delivery_partners) was originally sketched around. §2.14 (`canteens`) is the first real business collection built against this new model, confirming the campus-canteen product direction rather than the original multi-restaurant marketplace. Sections 2.2-2.9 (`restaurants`, `menu_items`, `orders`, `payments`, `reviews`, `coupons`, `notifications`, `delivery_partners`) remain unchanged from the original marketplace sketch, have **not** been validated against the new role model, and may need reconciliation or removal in a future phase — outside this phase's scope, flagged here so the inconsistency stays visible in the docs.
 
 ### 2.1 `users`
 
@@ -250,6 +250,26 @@ Security/forensics record for every auth event — see [ARCHITECTURE.md §6](./A
 | `metadata` | Mixed | Structured context (e.g. `{ reason: 'invalid_password' }`) — never a password or token value. |
 | `createdAt` | Date | Indexed. |
 
+### 2.14 `canteens`
+
+The first collection built for the campus-canteen product direction confirmed by this module — see the scope note at the top of §2. `location` is a plain string, not GeoJSON: unlike the original marketplace's `restaurants.location`, canteen discovery has no radius-search requirement (single campus), so a geospatial index would be unused structure.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `name` | String | Display name, original casing preserved. |
+| `nameKey` | String | `name`, trimmed + lowercased — the field the uniqueness rule actually enforces ("Main Canteen" and "main canteen" can't both exist), computed by the service layer on every create/rename. **Unique indexed.** Internal only, never returned by the API. |
+| `description` | String? | |
+| `location` | String | Free text (e.g. "Block A, Ground Floor") — not GeoJSON; see above. |
+| `image` | String? | URL. |
+| `contactNumber` | String | |
+| `email` | String | |
+| `openingTime` / `closingTime` | String | 24-hour `HH:mm`. Same-day hours only — an overnight canteen (e.g. 22:00-02:00) is not supported; `closingTime` must be strictly after `openingTime`. |
+| `isOpen` | Boolean | Default `true`. Toggled via `PATCH /canteens/:id/status` — an atomic aggregation-pipeline update (`$not: '$isOpen'`), not read-then-write, so two concurrent toggle calls can't race. |
+| `createdBy` | ObjectId (ref `users`) | Always the authenticated caller — never client-supplied, per [ARCHITECTURE.md §9.1](./ARCHITECTURE.md#91-server-is-the-source-of-truth). |
+| `isDeleted` / `deletedAt` / `deletedBy` | Boolean / Date? / ObjectId? | Soft delete — every read path (`findById`, `findAll`) filters `isDeleted: false` unconditionally; there is no "include deleted" query path. |
+| `createdAt` / `updatedAt` | Date | |
+
 ---
 
 ## 3. Relationships — Embedding vs. Referencing Rationale
@@ -304,6 +324,10 @@ Both have their own independent lifecycle (a payment can be refunded days later;
 | `audit_logs` | `actorId` | Standard | Per-user security history lookup. |
 | `audit_logs` | `action` | Standard | Filtering by event type (e.g. all lockouts). |
 | `audit_logs` | `createdAt` | Standard | Time-ordered queries — **no TTL**, per §2.13. |
+| `canteens` | `nameKey` | Unique | Enforces case-insensitive name uniqueness. |
+| `canteens` | `{ isDeleted: 1, isOpen: 1 }` | Compound | `GET /canteens`'s primary query — every read filters `isDeleted`, `isOpen` is the one documented filter. |
+| `canteens` | `createdBy` | Standard | Future "canteens I manage" queries. |
+| `canteens` | `name` | Standard | Supports `?sortBy=name`. |
 | `restaurants` | `location` | `2dsphere` | Radius-based discovery query — the single most performance-critical index in the system. |
 | `restaurants` | `{ status: 1, isOpen: 1 }` | Compound | Discovery query filters on both. |
 | `restaurants` | `cuisineTags` | Multikey | Cuisine filter. |
