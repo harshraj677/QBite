@@ -1,7 +1,7 @@
 import type { Types } from 'mongoose';
 
 import { AuditLogModel } from './audit-log.model';
-import type { AuditAction, IAuditLog } from './auth.types';
+import type { AuditAction, IAuditLog } from './audit-log.types';
 import type { UserRole } from '@modules/users/user.types';
 
 export interface CreateAuditLogInput {

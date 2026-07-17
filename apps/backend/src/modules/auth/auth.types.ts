@@ -41,39 +41,6 @@ export interface IPasswordResetToken extends Document {
   createdAt: Date;
 }
 
-// ─── AuditLog ────────────────────────────────────────────────────
-/**
- * Every security-relevant event this module can produce. Kept as a
- * closed set (not a free-form string) so a typo can't silently create
- * an untracked, unqueryable action name.
- */
-export const AUDIT_ACTIONS = [
-  'auth.register',
-  'auth.email.verified',
-  'auth.email.verification_failed',
-  'auth.login.success',
-  'auth.login.failure',
-  'auth.logout',
-  'auth.token.refreshed',
-  'auth.token.reuse_detected',
-  'auth.account.locked',
-  'auth.password.reset_requested',
-  'auth.password.reset_completed',
-] as const;
-export type AuditAction = (typeof AUDIT_ACTIONS)[number];
-
-export interface IAuditLog extends Document {
-  _id: Types.ObjectId;
-  actorId?: Types.ObjectId;
-  actorRole?: UserRole;
-  action: AuditAction;
-  success: boolean;
-  ipAddress?: string;
-  userAgent?: string;
-  metadata?: Record<string, unknown>;
-  createdAt: Date;
-}
-
 // ─── DTOs ────────────────────────────────────────────────────────
 export interface AuthTokensDto {
   accessToken: string;

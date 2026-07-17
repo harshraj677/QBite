@@ -16,6 +16,7 @@ jest.mock('@modules/auth/email.service', () => ({
 // every module in the auth chain picks up the capturing email double
 // instead of the real LoggingEmailService.
 import { createApp } from '../../app';
+import { AuditLogModel } from '@modules/audit/audit-log.model';
 import { UserModel } from '@modules/users/user.model';
 import { ACCOUNT_LOCK_THRESHOLD } from '@modules/auth/auth.constants';
 import { clearTestDb, connectTestDb, disconnectTestDb } from '../helpers/test-db';
@@ -237,6 +238,41 @@ describe('POST /auth/login', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('ACCOUNT_LOCKED');
+  });
+});
+
+describe('audit log side effects', () => {
+  // Regression coverage for the auth -> audit module extraction: prior
+  // to this, no test asserted on AuditLog documents directly, only on
+  // HTTP behavior. This proves AuthService's calls into
+  // AuditLogService (modules/audit) still land real documents in the
+  // audit_logs collection with the expected shape.
+  it('writes a success entry on login and a failure entry on bad credentials', async () => {
+    const { user, plainPassword } = await createTestUser();
+
+    const successRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ identifier: user.collegeEmail, password: plainPassword });
+    expect(successRes.status).toBe(200);
+
+    const failureRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ identifier: user.collegeEmail, password: 'WrongPassword1!' });
+    expect(failureRes.status).toBe(401);
+
+    const successLog = await AuditLogModel.findOne({
+      action: 'auth.login.success',
+      actorId: user._id,
+    });
+    expect(successLog).not.toBeNull();
+    expect(successLog?.success).toBe(true);
+
+    const failureLog = await AuditLogModel.findOne({
+      action: 'auth.login.failure',
+      actorId: user._id,
+    });
+    expect(failureLog).not.toBeNull();
+    expect(failureLog?.success).toBe(false);
   });
 });
 

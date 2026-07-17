@@ -1,7 +1,7 @@
 import { model, Schema } from 'mongoose';
 
-import type { IAuditLog } from './auth.types';
-import { AUDIT_ACTIONS } from './auth.types';
+import type { IAuditLog } from './audit-log.types';
+import { AUDIT_ACTIONS } from './audit-log.types';
 import { USER_ROLES } from '@modules/users/user.types';
 
 /**

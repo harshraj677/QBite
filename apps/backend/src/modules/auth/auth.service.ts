@@ -9,7 +9,8 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from '@errors/http-errors';
-import { logger } from '@logging/logger';
+import { AuditLogService } from '@modules/audit/audit-log.service';
+import type { AuditAction } from '@modules/audit/audit-log.types';
 import type { IUser, UserRole } from '@modules/users/user.types';
 import { toPublicUserDto } from '@modules/users/user.types';
 import type { PublicUserDto } from '@modules/users/user.types';
@@ -21,8 +22,7 @@ import {
   OTP_MAX_ATTEMPTS,
   PASSWORD_RESET_TOKEN_EXPIRY_MINUTES,
 } from './auth.constants';
-import { AuditLogRepository } from './audit-log.repository';
-import type { AuditAction, AuthTokensDto } from './auth.types';
+import type { AuthTokensDto } from './auth.types';
 import type {
   ForgotPasswordInput,
   LoginInput,
@@ -65,7 +65,7 @@ export class AuthService {
     private readonly refreshTokenRepository: RefreshTokenRepository = new RefreshTokenRepository(),
     private readonly otpRepository: VerificationOtpRepository = new VerificationOtpRepository(),
     private readonly passwordResetTokenRepository: PasswordResetTokenRepository = new PasswordResetTokenRepository(),
-    private readonly auditLogRepository: AuditLogRepository = new AuditLogRepository(),
+    private readonly auditLogService: AuditLogService = new AuditLogService(),
     private readonly emailService: EmailService = new LoggingEmailService(),
   ) {}
 
@@ -479,7 +479,7 @@ export class AuthService {
     return { dto: { accessToken, refreshToken: rawRefreshToken, expiresIn }, tokenHash };
   }
 
-  /** Never throws — an audit-logging failure must not break the auth flow it's observing. */
+  /** Delegates to AuditLogService, which never throws — see its record() doc. */
   private async recordAudit(input: {
     actorId?: Types.ObjectId;
     actorRole?: UserRole;
@@ -488,18 +488,14 @@ export class AuthService {
     meta: RequestMeta;
     metadata?: Record<string, unknown>;
   }): Promise<void> {
-    try {
-      await this.auditLogRepository.create({
-        actorId: input.actorId,
-        actorRole: input.actorRole,
-        action: input.action,
-        success: input.success,
-        ipAddress: input.meta.ipAddress,
-        userAgent: input.meta.userAgent,
-        metadata: input.metadata,
-      });
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to write audit log');
-    }
+    await this.auditLogService.record({
+      actorId: input.actorId,
+      actorRole: input.actorRole,
+      action: input.action,
+      success: input.success,
+      ipAddress: input.meta.ipAddress,
+      userAgent: input.meta.userAgent,
+      metadata: input.metadata,
+    });
   }
 }
