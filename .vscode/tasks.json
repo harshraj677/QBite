@@ -1,0 +1,62 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Backend: dev server",
+      "type": "npm",
+      "script": "dev",
+      "path": "apps/backend",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Backend: lint",
+      "type": "npm",
+      "script": "lint",
+      "path": "apps/backend",
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "Backend: build",
+      "type": "npm",
+      "script": "build",
+      "path": "apps/backend",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Admin: dev server",
+      "type": "npm",
+      "script": "dev",
+      "path": "apps/admin",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Admin: lint",
+      "type": "npm",
+      "script": "lint",
+      "path": "apps/admin",
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "Mobile: pub get",
+      "type": "shell",
+      "command": "flutter pub get",
+      "options": { "cwd": "${workspaceFolder}/apps/mobile" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Mobile: analyze",
+      "type": "shell",
+      "command": "flutter analyze",
+      "options": { "cwd": "${workspaceFolder}/apps/mobile" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Format: all (Prettier)",
+      "type": "npm",
+      "script": "format",
+      "problemMatcher": []
+    }
+  ]
+}

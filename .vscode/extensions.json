@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "dart-code.dart-code",
+    "dart-code.flutter",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "editorconfig.editorconfig",
+    "bradlc.vscode-tailwindcss",
+    "mongodb.mongodb-vscode",
+    "eamodio.gitlens",
+    "usernamehw.errorlens",
+    "christian-kohler.npm-intellisense"
+  ]
+}

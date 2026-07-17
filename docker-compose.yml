@@ -1,0 +1,53 @@
+# QBite — local development compose (placeholder)
+#
+# Not yet exercised end-to-end. Application services (backend/admin)
+# are commented out until their Dockerfiles are validated in a later
+# phase — bringing up "mongo" and "redis" alone is enough to support
+# local development against apps/backend running natively (npm run dev)
+# in the meantime.
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: qbite-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - qbite-mongo-data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    container_name: qbite-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - qbite-redis-data:/data
+
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/backend.Dockerfile
+  #   container_name: qbite-backend
+  #   env_file: apps/backend/.env
+  #   ports:
+  #     - "4000:4000"
+  #   depends_on:
+  #     - mongo
+  #     - redis
+
+  # admin:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/admin.Dockerfile
+  #   container_name: qbite-admin
+  #   env_file: apps/admin/.env.local
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+
+volumes:
+  qbite-mongo-data:
+  qbite-redis-data:

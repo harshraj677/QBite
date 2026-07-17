@@ -1,0 +1,58 @@
+# ─── Dependencies ───────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ─── Environment / secrets ──────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── Build output ───────────────────────────────────────────────
+dist/
+build/
+out/
+.next/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# ─── Logs ────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── OS ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── IDE (JetBrains) ─────────────────────────────────────────────
+.idea/
+*.iml
+
+# ─── VS Code (tracked selectively — see .vscode/) ────────────────
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# ─── Flutter / Dart (apps/mobile) ────────────────────────────────
+apps/mobile/.dart_tool/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/.pub-cache/
+apps/mobile/.pub/
+apps/mobile/build/
+apps/mobile/android/.gradle/
+apps/mobile/android/local.properties
+apps/mobile/android/**/gradle-wrapper.jar
+apps/mobile/ios/Flutter/.last_build_id
+apps/mobile/ios/Pods/
+apps/mobile/**/*.g.dart
+apps/mobile/**/*.freezed.dart
+apps/mobile/**/GeneratedPluginRegistrant.*
+
+# ─── Docker ──────────────────────────────────────────────────────
+docker/**/*.local.yml

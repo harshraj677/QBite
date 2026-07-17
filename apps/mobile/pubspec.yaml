@@ -1,0 +1,52 @@
+name: qbite
+description: "QBite — customer-facing food ordering & delivery app."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Routing
+  go_router: ^15.1.2
+
+  # Networking
+  dio: ^5.7.0
+
+  # Secure local storage (tokens) — dependency configured, no auth logic wired yet
+  flutter_secure_storage: ^9.2.2
+
+  # Immutable models / JSON codegen — no models generated yet
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+  # Environment variable loading — wired in Phase 3, dependency staged now
+  flutter_dotenv: ^5.2.1
+
+  # Typography
+  google_fonts: ^6.2.1
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # Code generation toolchain
+  build_runner: ^2.4.13
+  freezed: ^2.5.7
+  json_serializable: ^6.9.0
+  riverpod_generator: ^2.6.3
+  custom_lint: ^0.7.0
+  riverpod_lint: ^2.6.3
+
+flutter:
+  uses-material-design: true

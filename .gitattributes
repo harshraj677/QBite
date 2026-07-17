@@ -1,0 +1,12 @@
+# Normalize line endings to LF in the repository regardless of the
+# checking-out OS — avoids noisy whole-file diffs between Windows and
+# Unix contributors.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.jar binary
+*.g.dart -diff
+*.freezed.dart -diff

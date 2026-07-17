@@ -1,0 +1,23 @@
+# CODEOWNERS
+# Requests review automatically from the relevant owner(s) when a PR
+# touches matching paths. Update the GitHub usernames below once the
+# team is staffed — placeholders for now (single-maintainer stage).
+
+# Default owner for anything not matched below
+*                       @harshraj677
+
+# Mobile (Flutter)
+/apps/mobile/           @harshraj677
+
+# Backend (Node/Express)
+/apps/backend/          @harshraj677
+
+# Admin panel (Next.js)
+/apps/admin/             @harshraj677
+
+# Shared packages
+/packages/              @harshraj677
+
+# Engineering documentation — architecture-affecting changes warrant
+# explicit review regardless of which app they accompany
+/docs/                  @harshraj677

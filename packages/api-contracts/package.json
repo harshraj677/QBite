@@ -1,0 +1,9 @@
+{
+  "name": "@qbite/api-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared API contract source (request/response schemas, error codes) consumed by apps/backend for validation and by apps/admin for typed API calls — see docs/API_SPECIFICATION.md.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "license": "UNLICENSED"
+}

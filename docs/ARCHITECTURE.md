@@ -260,35 +260,49 @@ Every state transition is appended to the order's `statusHistory` (see [DATABASE
 
 ## 8. Folder Structure (Repository-Level)
 
-QBite is a **monorepo** — one Git repository, three applications, shared documentation:
+QBite is an **`apps/` + `packages/` monorepo** (npm workspaces) — one Git repository, three deployable applications, three shared (currently empty) packages, shared documentation. This supersedes an earlier flat `mobile/backend/admin/` sketch from this document's first draft; separating deployable apps from shared, non-deployable code is the standard shape once a repo expects to share TypeScript code between two of its surfaces.
 
 ```
-QBite/
-  docs/                        → this documentation set
-  mobile/                      → Flutter customer app (feature-first, see §2.1)
-  backend/                     → Node/Express API (modular monolith, see §3.1)
-    src/
-      config/
-      modules/
-      middlewares/
-      jobs/
-      sockets/
-      utils/
-      tests/
-  admin/                       → Next.js admin panel (see §4.1)
-    app/
-    components/
-    lib/
-  shared/                      → (future) shared TypeScript types between backend and admin, if/when justified
+qbite/
+  apps/
+    mobile/                    → Flutter customer app (feature-first, see §2.1) — not an npm workspace
+    backend/                   → Node/Express/TypeScript API (modular monolith, see §3.1)
+      src/
+        config/
+        modules/
+        middlewares/
+        jobs/
+        sockets/
+        utils/
+        tests/
+    admin/                      → Next.js admin panel (see §4.1)
+      src/
+        app/
+          (restaurant)/
+          (platform-admin)/
+          (auth)/
+        components/
+        lib/
+        hooks/
+        types/
+  packages/
+    shared-types/                → TypeScript types shared between backend ↔ admin
+    shared-utils/                 → Framework-agnostic shared utilities
+    api-contracts/                 → Shared API contract source (schemas, error codes) — see API_SPECIFICATION.md
+  docs/                             → this documentation set
+  scripts/                          → dev environment scripts (setup, clean, lint-all, docker-services)
+  docker/                           → Dockerfile placeholders + docker-compose.yml
   .github/
-    workflows/                 → CI pipelines (per-app, path-filtered)
+    workflows/                      → CI pipelines (per-app, path-filtered) — folder present, no workflows added yet
   QBite_SRS_PRD.md
   README.md
 ```
 
-**Path-filtered CI:** each app's pipeline triggers only on changes within its own directory, so a docs-only or mobile-only change doesn't waste CI minutes rebuilding the backend and vice versa.
+**Why `apps/mobile` is not an npm workspace:** npm workspaces (and the root `package.json`) only list `apps/backend`, `apps/admin`, and `packages/*` — Flutter/Dart has its own dependency manager (`pub`) and cannot participate in an npm workspace. `apps/mobile` lives alongside the JS/TS apps for monorepo colocation (single repo, single PR can touch mobile + backend together) but is dependency-managed independently via `flutter pub get`.
 
-**On `shared/`:** not created speculatively. It gets created the first time a type genuinely needs to be duplicated between `backend` and `admin` — introducing shared-package tooling (build step, versioning) before there's a real duplication problem is the kind of premature abstraction this project avoids.
+**Path-filtered CI (planned):** each app's pipeline will trigger only on changes within its own directory, so a docs-only or mobile-only change doesn't waste CI minutes rebuilding the backend and vice versa — not yet implemented, since `.github/workflows/` is intentionally empty during the engineering-foundation phase.
+
+**On `packages/*`:** scaffolded now (package.json + placeholder `src/index.ts` per package) so the workspace structure and TypeScript project references are provable/buildable from day one, but deliberately left empty of real exports. Real types/utilities/contracts move in only once genuine duplication exists between `apps/backend` and `apps/admin` — populating them speculatively would be exactly the kind of premature abstraction this project avoids.
 
 ---
 
