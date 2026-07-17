@@ -131,23 +131,49 @@ module/
   <module>.service.ts       → business logic, orchestrates repository + external calls
   <module>.repository.ts    → data-access layer, all MongoDB queries live here
   <module>.model.ts         → Mongoose schema/model definition
-  <module>.validation.ts    → request schema validation (Zod/Joi)
+  <module>.validation.ts    → request schema validation (Zod)
   <module>.types.ts         → module-local TypeScript types/interfaces
 ```
 
 **Layering rule:** `routes → controller → service → repository → model`. A controller never talks to a model directly; a service never builds an HTTP response. This separation is what keeps business logic unit-testable without spinning up Express.
 
+**Cross-cutting infrastructure lives in its own top-level folder, one concern each** — added during the backend-core-infrastructure phase, alongside `config/, modules/, middlewares/, jobs/, sockets/, utils/, tests/`:
+
+```
+src/
+  errors/        → AppError base class + one subclass per HTTP-status/error-code pairing (§3.2)
+  validation/     → validateRequest(schemas) — generic Zod-based request-validation middleware factory
+  context/         → AsyncLocalStorage-based request context (currently: requestId)
+  logging/          → the pino logger instance (structured, request-ID-aware — see below)
+  response/          → sendSuccess/sendPaginated — the response-envelope builders every route uses
+  api/                → version-mount points (api/v1/index.ts today; api/v2/ added alongside it for a
+                         breaking change, per API_SPECIFICATION.md §7 — v1 is never modified in place)
+  health/               → the liveness/readiness endpoint (see §3.2's routes/controllers exception)
+```
+
+These are deliberately *not* folded into `utils/` — each is a single, named concern, not a miscellany bucket.
+
 ### 3.2 Middleware Pipeline
 
-Applied in a fixed, predictable order on protected routes:
+Two distinct pipelines, not one — conflating them was an earlier draft of this document's mistake, corrected once the infrastructure was actually built:
 
-1. **Request ID / correlation ID** injection (for tracing across logs)
-2. **Authentication** — verifies JWT, attaches `req.user`
-3. **Authorization (RBAC)** — checks `req.user.role` against route's required role(s)
-4. **Validation** — schema-validates `body`/`params`/`query` before the controller ever sees them
-5. **Rate limiting** — applied globally, with stricter limits on sensitive routes (OTP, order creation, payment)
-6. **Controller execution**
-7. **Centralized error handler** — every thrown error (including validation/auth failures) resolves to the standard error envelope defined in [API_SPECIFICATION.md](./API_SPECIFICATION.md)
+**Global pipeline** (`app.ts`, applied to every request, before any route is reached): `requestId → requestLogger → securityHeaders (helmet/hpp) → cors → defaultRateLimiter → compression → cookies → body parsing → sanitizeInput (NoSQL-injection guard) → route mounts (/health, /api-docs, /api/v1) → notFound → errorHandler`. `errorHandler` is always last; every thrown error — from any layer, including the ones below — resolves to the standard error envelope defined in [API_SPECIFICATION.md](./API_SPECIFICATION.md) §5.
+
+**Per-route pipeline** (layered on top of the global chain by each module as it's built, not part of `app.ts`):
+
+1. **Authentication** — verifies JWT, attaches `req.user`
+2. **Authorization (RBAC)** — checks `req.user.role` against the route's required role(s)
+3. **Validation** — `validateRequest({ body, params, query })` (see `validation/`) — schema-validates before the controller ever sees the request, replacing `req.body`/`req.params`/`req.query` with the parsed, typed result
+4. **Stricter rate limiting** where warranted (e.g. OTP request) — `middlewares/rate-limiter.middleware.ts`'s `createRateLimiter(...)`, layered on top of the global default
+5. **Controller execution** — wrapped in `catchAsync` (`utils/async-handler.ts`) so a rejected promise reaches `errorHandler` instead of hanging
+
+**Request correlation:** `requestId` (global step 1) generates or reuses an inbound `X-Request-Id` header via `crypto.randomUUID()` (no dependency needed — built into Node 20+) and runs the rest of the request inside `context/request-context.ts`'s `AsyncLocalStorage`. The logger's `mixin` reads that context on every log call, so a request ID appears on every log line for that request — including from code several calls deep — without being passed as a parameter anywhere.
+
+**Logging:** `pino`, not `morgan`. JSON output (what a log aggregator expects) in every environment except `development` (pretty-printed via `pino-pretty`) and `test` (silent — test/CI output should be signal, not noise). `morgan`'s plain-text, non-correlated access log was removed in favor of this.
+
+**Errors:** `errors/app-error.ts` defines `AppError` (statusCode, code, message, details, isOperational); `errors/http-errors.ts` has one subclass per status/code pairing in API_SPECIFICATION.md §5.1 (`BadRequestError`, `NotFoundError`, `ConflictError`, ...). A module throws these directly; `middlewares/error-handler.middleware.ts` maps them to the envelope and decides — via `isOperational` — whether `message`/`details` are safe to expose to the client in production, or whether to return a generic message and rely on the logged stack trace instead.
+
+**Security:** `helmet` + `hpp` run globally, early. NoSQL-injection sanitization (`sanitizeInput`, in `middlewares/security.middleware.ts`) is a **hand-rolled** ~20-line middleware, not the commonly-used `express-mongo-sanitize` package — that package reassigns `req.query` wholesale, which throws under Express 5 (`req.query` is a getter with no setter as of Express 5; confirmed by running it, not just reading about it). The fix — mutating the existing object's keys in place instead of reassigning the property — lives in `utils/replace-request-property.ts` and is reused by `validateRequest` for the same reason (schema-parsed query replacement hits the identical Express 5 constraint).
 
 ### 3.3 Asynchronous Work — BullMQ (Redis-backed)
 
@@ -168,8 +194,9 @@ This keeps request/response latency predictable and isolates slow/flaky third-pa
 
 ### 3.5 Configuration & Environments
 
-- All configuration read from environment variables through a single validated config module (fails fast at boot if a required variable is missing — never fails silently at first use).
-- Three environments: `development`, `staging`, `production`, each with isolated MongoDB database, Redis instance, and Razorpay key set (test keys in dev/staging, live keys only in production).
+- All configuration read from environment variables through `config/env.ts` — a single Zod schema (`envSchema.safeParse(process.env)`), validated once at import time. A missing or malformed variable crashes the process immediately with an itemized list of every problem found, not just the first one, and not silently at first use. Zod is used here for the same reason it's used for request validation (`validation/`) — one schema-validation approach for both jobs, not two libraries doing the same thing.
+- Four `NODE_ENV` values: `development`, `staging`, `production`, and `test` (the last used only by the Jest suite — see §3.2's note on `logging/`). `development`/`staging`/`production` each get an isolated MongoDB database, Redis instance, and Razorpay key set (test keys in dev/staging, live keys only in production).
+- Dev-convenience defaults (e.g. a placeholder JWT secret so a fresh clone can boot without configuring secrets first) are rejected at boot if `NODE_ENV=production` — a production process refuses to start with a placeholder secret rather than silently running insecurely.
 
 ---
 
