@@ -1,0 +1,38 @@
+{
+  "@@locale": "en",
+
+  "appName": "QBite",
+  "@appName": {
+    "description": "Application name, shown on splash and in system UI."
+  },
+
+  "retry": "Retry",
+  "@retry": {
+    "description": "Generic retry action label, used by AppErrorView."
+  },
+
+  "somethingWentWrong": "Something went wrong",
+  "@somethingWentWrong": {
+    "description": "Generic error state title, used by AppErrorView when no specific message is provided."
+  },
+
+  "loading": "Loading…",
+  "@loading": {
+    "description": "Generic loading state label, used by AppLoadingView."
+  },
+
+  "noResultsFound": "No results found",
+  "@noResultsFound": {
+    "description": "Generic empty state title, used by AppEmptyView when no specific message is provided."
+  },
+
+  "unexpectedErrorTitle": "Unexpected error",
+  "@unexpectedErrorTitle": {
+    "description": "Title shown by the global error fallback widget (ErrorWidget.builder) in release mode."
+  },
+
+  "pageNotFoundTitle": "Page not found",
+  "@pageNotFoundTitle": {
+    "description": "Title shown by the router's errorBuilder for unmatched routes."
+  }
+}

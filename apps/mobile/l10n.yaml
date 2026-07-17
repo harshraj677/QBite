@@ -1,0 +1,11 @@
+# Flutter gen-l10n configuration.
+# Generates lib/l10n/generated/app_localizations.dart from the ARB
+# files in lib/l10n. Only generic, feature-agnostic strings are seeded
+# during the core-foundation phase — feature copy is added per-feature
+# as each screen is implemented.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-dir: lib/l10n/generated
+output-class: AppLocalizations
+nullable-getter: false
