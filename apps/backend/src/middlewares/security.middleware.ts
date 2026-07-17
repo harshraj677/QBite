@@ -50,26 +50,25 @@ function sanitizeValue(value: unknown): unknown {
  * MongoDB is the datastore.
  *
  * A hand-rolled ~20-line middleware rather than the widely-used
- * `express-mongo-sanitize` package: that package reassigns
- * `req.query` wholesale, which throws under Express 5 ("Cannot set
- * property query of #<IncomingMessage> which has only a getter") —
- * confirmed by running it. This mutates in place via
- * `replaceRequestProperty` instead (same fix `validateRequest` needs
- * for the same reason), and has no dependency on a package with an
- * unresolved Express 5 incompatibility.
+ * `express-mongo-sanitize` package: that package reassigns `req.query`
+ * wholesale, which throws under Express 5 ("Cannot set property query
+ * of #<IncomingMessage> which has only a getter") — confirmed by
+ * running it. `replaceRequestProperty` handles the correct replacement
+ * strategy per property (`query` needs `Object.defineProperty`, not
+ * in-place mutation — see that file's docstring for why, and for a
+ * real bug this project shipped before that distinction was made),
+ * and has no dependency on a package with an unresolved Express 5
+ * incompatibility.
  *
  * Applied after body parsing (see app.ts) — `req.body` doesn't exist
  * until then.
  */
 export function sanitizeInput(): RequestHandler {
   return (req: Request, _res: Response, next: NextFunction) => {
-    replaceRequestProperty(req.query, sanitizeValue(req.query) as Record<string, unknown>);
-    replaceRequestProperty(req.params, sanitizeValue(req.params) as Record<string, unknown>);
+    replaceRequestProperty(req, 'query', sanitizeValue(req.query) as Record<string, unknown>);
+    replaceRequestProperty(req, 'params', sanitizeValue(req.params) as Record<string, unknown>);
     if (req.body && typeof req.body === 'object') {
-      replaceRequestProperty(
-        req.body as object,
-        sanitizeValue(req.body) as Record<string, unknown>,
-      );
+      replaceRequestProperty(req, 'body', sanitizeValue(req.body) as Record<string, unknown>);
     }
     next();
   };

@@ -15,9 +15,11 @@ import { replaceRequestProperty } from '@utils/replace-request-property';
  * Schemas must resolve to an object shape (`z.object({...})`) — this
  * is what nearly every REST body/query/params schema is anyway, and
  * it's required here because a successful parse *replaces* the
- * contents of `req.body`/`req.params`/`req.query` in place (see
- * `utils/replace-request-property.ts` for why "in place" rather than
- * reassignment — Express 5 made `req.query` a getter with no setter).
+ * effective contents of `req.body`/`req.params`/`req.query` — see
+ * `utils/replace-request-property.ts` for how each is replaced
+ * (`query` specifically needs `Object.defineProperty`, not in-place
+ * mutation, because Express 5's `req.query` getter re-parses the raw
+ * query string on every access).
  *
  * On failure, a `ValidationError` is thrown with `details` populated
  * from Zod's issue list, matching the error envelope in
@@ -45,7 +47,7 @@ export function validateRequest(schemas: RequestSchemas): RequestHandler {
         }));
         return next(new ValidationError(`Invalid request ${part}.`, details));
       }
-      replaceRequestProperty(req[part] as object, result.data);
+      replaceRequestProperty(req, part, result.data);
     }
     next();
   };

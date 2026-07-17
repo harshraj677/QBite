@@ -1,22 +1,52 @@
+import type { Request } from 'express';
+
 /**
- * Replaces the *contents* of a request property (`req.query`,
- * `req.params`, `req.body`) in place, rather than reassigning the
- * property itself.
+ * Replaces the *effective contents* of `req.query`, `req.params`, or
+ * `req.body` with `next` — the one place Express 5's `req.query`
+ * quirks are handled, so callers (`middlewares/security.middleware.ts`,
+ * `validation/validate-request.middleware.ts`) don't need to know
+ * about them.
  *
- * Express 5 defines `req.query` as a getter with no setter — `req.query
- * = x` throws `Cannot set property query of #<IncomingMessage> which
- * has only a getter`. The getter still returns a live, mutable object
- * reference each time, though, so clearing its own keys and copying
- * the new values into that same object achieves the same effect
- * without touching the property binding itself. Used by both
- * `middlewares/security.middleware.ts` (sanitization) and
- * `validation/validate-request.middleware.ts` (schema-parsed
- * replacement) — the one place this Express 5 quirk is handled, so
- * neither call site needs to know about it.
+ * `req.params` and `req.body` are plain data properties, so mutating
+ * the existing object's own keys in place is sufficient.
+ *
+ * `req.query` is different in a way that bit this project twice:
+ * Express 5 defines it as a **getter that re-parses the raw query
+ * string on every access** — it does NOT return the same cached
+ * object each time. Mutating "the object the getter just returned" is
+ * therefore silently discarded the moment anything reads `req.query`
+ * again (the next read re-invokes the getter and gets a fresh,
+ * un-mutated parse). This was true for `sanitizeInput`'s NoSQL-
+ * injection stripping since the day it was written — the stripped
+ * value never actually reached a route handler — and was only caught
+ * once a real endpoint (`GET /canteens`) needed to *read* a validated
+ * query param back and got the raw, un-defaulted value instead. The
+ * existing test for both call sites only checked "the request doesn't
+ * crash," not "the downstream handler sees the replaced value," which
+ * is how this shipped unnoticed.
+ *
+ * The fix: for `query` specifically, shadow the getter with a plain
+ * value property on this request instance via `Object.defineProperty`
+ * — a per-request override, not a change to Express's prototype.
  */
-export function replaceRequestProperty(target: object, next: Record<string, unknown>): void {
-  for (const key of Object.keys(target)) {
-    delete (target as Record<string, unknown>)[key];
+export function replaceRequestProperty(
+  req: Request,
+  key: 'query' | 'params' | 'body',
+  next: Record<string, unknown>,
+): void {
+  if (key === 'query') {
+    Object.defineProperty(req, 'query', {
+      value: next,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+    return;
+  }
+
+  const target = req[key] as Record<string, unknown>;
+  for (const existingKey of Object.keys(target)) {
+    delete target[existingKey];
   }
   Object.assign(target, next);
 }
