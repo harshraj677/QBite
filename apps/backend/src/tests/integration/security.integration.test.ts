@@ -25,9 +25,16 @@ describe('security middleware', () => {
     expect(res.body.success).toBe(true);
   });
 
-  it('sets a RateLimit header on every response', async () => {
+  it('skips rate limiting under NODE_ENV=test (no RateLimit headers)', async () => {
+    // Updated during the IAM phase: createRateLimiter now skips
+    // entirely under NODE_ENV=test (see
+    // middlewares/rate-limiter.middleware.ts) so integration tests can
+    // exercise an endpoint many times without tripping a 429 that has
+    // nothing to do with what they're testing. The real
+    // limit-exceeded mechanics are covered by
+    // rate-limiter.middleware.test.ts instead.
     const res = await request(app).get('/health');
 
-    expect(res.headers['ratelimit-limit']).toBeDefined();
+    expect(res.headers['ratelimit-limit']).toBeUndefined();
   });
 });

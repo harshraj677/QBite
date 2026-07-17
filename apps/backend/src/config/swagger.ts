@@ -14,8 +14,9 @@ import { env } from './env';
  * exists today, proving the pipeline works end-to-end) rather than
  * maintaining a hand-written spec file that drifts from the code.
  *
- * `paths` starts empty beyond that one example, correctly — there are
- * no feature routes yet.
+ * `paths` grows as each module adds its own `@openapi` blocks — the
+ * `auth` module (docs/DATABASE_DESIGN.md's IAM phase) is the first
+ * real feature module documented this way.
  */
 const swaggerSpec = swaggerJsdoc({
   definition: {
@@ -27,6 +28,17 @@ const swaggerSpec = swaggerJsdoc({
         'QBite backend API. See docs/API_SPECIFICATION.md for the full contract this spec documents.',
     },
     servers: [{ url: `http://localhost:${env.port}`, description: env.nodeEnv }],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description:
+            'Access token from /auth/login or /auth/refresh, sent as `Authorization: Bearer <token>`.',
+        },
+      },
+    },
   },
   apis: [
     'src/health/*.routes.ts',
