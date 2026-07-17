@@ -34,6 +34,11 @@ const envSchema = z.object({
 
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+
+  // Optional: restricts POST /auth/register's collegeEmail to this
+  // domain (e.g. "college.edu"). Unset = any valid email accepted —
+  // the specific institution's domain isn't known at this stage.
+  COLLEGE_EMAIL_DOMAIN: z.string().min(1).optional(),
 });
 
 function loadConfig() {
@@ -64,6 +69,7 @@ function loadConfig() {
       windowMs: raw.RATE_LIMIT_WINDOW_MS,
       max: raw.RATE_LIMIT_MAX,
     },
+    collegeEmailDomain: raw.COLLEGE_EMAIL_DOMAIN,
   };
 }
 
