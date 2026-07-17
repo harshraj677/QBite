@@ -1,4 +1,4 @@
-# QuickBite — Software Requirements Specification & Product Requirement Document
+# QBite — Software Requirements Specification & Product Requirement Document
 
 **Document Owner:** Product & Engineering
 **Version:** 1.0 (Pre-Development Planning)
@@ -11,9 +11,9 @@
 
 The requested tech stack (Razorpay, Socket.IO, FCM, Node/Express/MongoDB backend, Next.js admin panel) is characteristic of a **multi-restaurant food ordering & delivery marketplace** (Swiggy/Zomato-style), not a single-canteen ordering kiosk. This document is written on that assumption:
 
-- **QuickBite Customer App** (Flutter) — the only mobile app in scope for v1.
-- **QuickBite Backend** (Node.js/Express/MongoDB) — single source of truth for all clients.
-- **QuickBite Admin Panel** (Next.js) — used by two internal actor types: **Platform Admins** (you/your team) and **Restaurant Partners** (who manage their own menu/orders through the same web app, gated by role).
+- **QBite Customer App** (Flutter) — the only mobile app in scope for v1.
+- **QBite Backend** (Node.js/Express/MongoDB) — single source of truth for all clients.
+- **QBite Admin Panel** (Next.js) — used by two internal actor types: **Platform Admins** (you/your team) and **Restaurant Partners** (who manage their own menu/orders through the same web app, gated by role).
 - **Delivery** is handled by a lightweight delivery-partner role inside the same backend/admin surface in v1 (web-based order acceptance, not a native app) to keep scope shippable. A dedicated Delivery Partner Flutter app is explicitly deferred to the Post-MVP roadmap (Section 9).
 
 If your actual intent is narrower (e.g., a single-canteen pre-order app for one campus with no multi-restaurant marketplace), most of this document still applies but Sections 5, 10, 13 and 14 would shrink significantly — flag it and I'll re-cut the doc.
@@ -22,9 +22,9 @@ If your actual intent is narrower (e.g., a single-canteen pre-order app for one 
 
 ## 1. Product Vision
 
-QuickBite is a mobile-first food ordering platform that connects hungry customers with local restaurants and independent delivery partners, delivering an experience that is **fast, reliable, and trustworthy** from the first install. The long-term vision is to become the default food-ordering app for a defined local market (starting with a campus/college-town geography, expanding to city-wide) by winning on **speed of ordering, accuracy of delivery ETA, and payment reliability** — the three things that most consistently break trust in food-delivery apps.
+QBite is a mobile-first food ordering platform that connects hungry customers with local restaurants and independent delivery partners, delivering an experience that is **fast, reliable, and trustworthy** from the first install. The long-term vision is to become the default food-ordering app for a defined local market (starting with a campus/college-town geography, expanding to city-wide) by winning on **speed of ordering, accuracy of delivery ETA, and payment reliability** — the three things that most consistently break trust in food-delivery apps.
 
-QuickBite is built to be **operated as a real business**, not demoed once and abandoned: every architectural decision in this document optimizes for the app surviving contact with real users, real payments, and real Play Store review — not for the fastest path to a working prototype.
+QBite is built to be **operated as a real business**, not demoed once and abandoned: every architectural decision in this document optimizes for the app surviving contact with real users, real payments, and real Play Store review — not for the fastest path to a working prototype.
 
 ---
 
@@ -37,7 +37,7 @@ QuickBite is built to be **operated as a real business**, not demoed once and ab
 | Customers in local/campus markets want **fast, predictable delivery** more than infinite restaurant choice — large-platform UX (ads, upsells, wide catalog) adds friction for this segment. | Campus/local ordering is habitual (same 5-10 places), not discovery-driven. |
 | Existing apps provide poor real-time visibility into order status once placed, leading to repeated "where is my order" support burden. | Directly addressed by Socket.IO-driven live order state in this design. |
 
-**QuickBite's answer:** a leaner, lower-commission, faster marketplace focused on a defined local geography, with best-in-class order-status transparency and payment reliability.
+**QBite's answer:** a leaner, lower-commission, faster marketplace focused on a defined local geography, with best-in-class order-status transparency and payment reliability.
 
 ---
 
@@ -203,7 +203,7 @@ Checkout → Razorpay sheet → Payment fails/cancelled → Order left in `PAYME
 ### Phase 3+ (Scale)
 - Multi-city expansion tooling (city-based config, dynamic commission rules)
 - AI-based recommendation engine
-- Subscription plans (QuickBite Plus — free delivery tier)
+- Subscription plans (QBite Plus — free delivery tier)
 - Dark-store/inventory model support (grocery-adjacent expansion)
 - Voice ordering / chatbot support
 
@@ -507,7 +507,7 @@ Assuming a start date around **2026-07-27** (allowing ~1 week for final scope si
 - **Auth:** JWT access tokens short-lived; refresh tokens stored **hashed** server-side, rotated on use, revocable (logout-everywhere capability). OTP rate-limited and expiring (e.g., 5 min TTL, max 3 attempts).
 - **Input validation:** Schema validation (Zod/Joi) on every request body/param at the API boundary — never trust client input, especially pricing/quantity fields.
 - **Authorization:** Role-based access control enforced server-side on every endpoint (customer/restaurant/delivery/admin) — role checks never inferred from client-sent data.
-- **Payment integrity:** Razorpay webhook signature (HMAC-SHA256) verified on every webhook call; webhook endpoint excluded from generic auth middleware but protected by signature check instead; raw card data never touches QuickBite servers (PCI scope stays with Razorpay Checkout).
+- **Payment integrity:** Razorpay webhook signature (HMAC-SHA256) verified on every webhook call; webhook endpoint excluded from generic auth middleware but protected by signature check instead; raw card data never touches QBite servers (PCI scope stays with Razorpay Checkout).
 - **Secrets management:** No secrets in source control; environment-based secret injection (e.g., AWS Secrets Manager/GCP Secret Manager or at minimum encrypted `.env` handling in CI).
 - **Rate limiting & abuse prevention:** IP + user-based rate limits on auth/OTP endpoints and order-creation endpoint (prevent coupon-abuse scripting and OTP-bombing).
 - **Data protection:** PII (phone, address) access-logged for admin views; encryption at rest via MongoDB Atlas default encryption; principle of least privilege for admin roles (platform admin vs. restaurant-scoped admin must not see other restaurants' data — enforced via query-level scoping, not just UI hiding).
@@ -534,7 +534,7 @@ Assuming a start date around **2026-07-27** (allowing ~1 week for final scope si
 Before Phase 0 begins, these decisions should be explicitly confirmed (not assumed further):
 
 1. **Launch geography scope** — single campus, single town, or multi-area from day 1? (Drives Section 18's cold-start-liquidity strategy and Phase 6 rollout plan.)
-2. **Delivery model confirmation** — is QuickBite operating its own delivery fleet (this document's assumption) or is delivery restaurant-managed (self-delivery), which would remove/shrink Section 5.10 and the delivery-partner role entirely?
+2. **Delivery model confirmation** — is QBite operating its own delivery fleet (this document's assumption) or is delivery restaurant-managed (self-delivery), which would remove/shrink Section 5.10 and the delivery-partner role entirely?
 3. **COD support** — is cash-on-delivery a hard requirement for launch, or can v1 be online-payment-only to simplify Phase 2?
 4. **Team size/composition** — needed to re-baseline the Section 16/17 estimates realistically.
 5. **Brand/legal entity readiness** — Play Store developer account, business registration for Razorpay live-mode activation (Razorpay requires KYC/business verification before going beyond test mode) — this can be a launch-blocking lead time item if not started early.
