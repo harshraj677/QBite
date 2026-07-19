@@ -312,6 +312,42 @@ describe('OrdersService.getOrderById', () => {
   });
 });
 
+describe('OrdersService.searchOrders', () => {
+  it('delegates to the repository unscoped (no studentId/canteenId) and maps to DTOs', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.search.mockResolvedValue({ orders: [makeOrder()], total: 1 });
+
+    const result = await service.searchOrders({
+      page: 1,
+      limit: 20,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    });
+
+    expect(ordersRepo.search).toHaveBeenCalledWith(
+      expect.not.objectContaining({ studentId: expect.anything(), canteenId: expect.anything() }),
+    );
+    expect(result.total).toBe(1);
+  });
+
+  it('passes the pickupToken filter through untouched', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.search.mockResolvedValue({ orders: [], total: 0 });
+
+    await service.searchOrders({
+      pickupToken: '482913',
+      page: 1,
+      limit: 20,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    });
+
+    expect(ordersRepo.search).toHaveBeenCalledWith(
+      expect.objectContaining({ pickupToken: '482913' }),
+    );
+  });
+});
+
 describe('OrdersService.updateStatus', () => {
   it('advances a valid transition and records an audit log', async () => {
     const { service, ordersRepo, auditLogService } = makeService();
@@ -322,7 +358,30 @@ describe('OrdersService.updateStatus', () => {
 
     expect(result.status).toBe('accepted');
     expect(auditLogService.record).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'order.status_updated' }),
+      expect.objectContaining({ action: 'order.accepted' }),
+    );
+  });
+
+  // Regression coverage for the Kitchen Workflow phase's audit-naming
+  // change: this method used to log one generic 'order.status_updated'
+  // for every transition — replaced with a precise action per target
+  // status (see orders.service.ts's statusUpdateAuditAction) so both
+  // the direct /status endpoint and every Kitchen endpoint that calls
+  // this same method produce a distinguishable audit event.
+  it.each([
+    ['pending', 'accepted', 'order.accepted'],
+    ['accepted', 'preparing', 'order.preparing'],
+    ['preparing', 'ready', 'order.ready'],
+    ['ready', 'completed', 'order.completed'],
+  ] as const)('logs %s -> %s as %s, not a generic action', async (from, to, expectedAction) => {
+    const { service, ordersRepo, auditLogService } = makeService();
+    ordersRepo.findById.mockResolvedValue(makeOrder({ status: from }));
+    ordersRepo.updateStatus.mockResolvedValue(makeOrder({ status: to }));
+
+    await service.updateStatus('id', to, admin, meta);
+
+    expect(auditLogService.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: expectedAction }),
     );
   });
 

@@ -39,7 +39,20 @@ export const AUDIT_ACTIONS = [
   'menu_item.reordered',
   // order
   'order.created',
-  'order.status_updated',
+  // Per-transition, not a single generic 'order.status_updated' — that
+  // name was used through the Order-phase and Kitchen Workflow phase's
+  // review of it (see orders.service.ts's `statusUpdateAuditAction`
+  // and ARCHITECTURE.md §3.1's `modules/kitchen` note) replaced it so
+  // both PATCH /orders/:id/status and every Kitchen endpoint that
+  // funnels through the same OrdersService.updateStatus method log a
+  // precise event instead of an undifferentiated one. Old audit_logs
+  // documents written before this change keep their stored
+  // 'order.status_updated' value — Mongoose's enum is a write-time
+  // validator, not retroactively enforced on existing documents.
+  'order.accepted',
+  'order.preparing',
+  'order.ready',
+  'order.completed',
   'order.cancelled',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

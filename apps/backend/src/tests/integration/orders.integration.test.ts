@@ -487,20 +487,34 @@ describe('PATCH /orders/:id/status', () => {
     expect(res.status).toBe(409);
   });
 
-  it('writes an order.status_updated audit log entry', async () => {
+  // Regression coverage for the Kitchen Workflow phase's audit-naming
+  // change — see orders.service.test.ts's equivalent unit-level test
+  // for the full rationale. This asserts the real HTTP path (not just
+  // the mocked service) writes the precise per-transition action.
+  it('writes a precise per-transition audit action, not a generic order.status_updated', async () => {
     const { Authorization: adminAuth } = await authHeaderFor('admin');
     const { Authorization: staffAuth, user: staff } = await authHeaderFor('kitchen_staff');
     const { Authorization: studentAuth } = await authHeaderFor('student');
     const { canteenId, menuItemId } = await setupCanteenWithItem(adminAuth);
     const order = await placeOrder(studentAuth, canteenId, menuItemId, 1);
+    const id = order.body.data.order.id as string;
 
-    await request(app)
-      .patch(`/api/v1/orders/${order.body.data.order.id}/status`)
-      .set('Authorization', staffAuth)
-      .send({ status: 'accepted' });
+    for (const [status, expectedAction] of [
+      ['accepted', 'order.accepted'],
+      ['preparing', 'order.preparing'],
+      ['ready', 'order.ready'],
+      ['completed', 'order.completed'],
+    ] as const) {
+      await request(app)
+        .patch(`/api/v1/orders/${id}/status`)
+        .set('Authorization', staffAuth)
+        .send({ status });
 
-    const log = await AuditLogModel.findOne({ action: 'order.status_updated', actorId: staff._id });
-    expect(log).not.toBeNull();
+      const log = await AuditLogModel.findOne({ action: expectedAction, actorId: staff._id });
+      expect(log).not.toBeNull();
+    }
+
+    expect(await AuditLogModel.findOne({ action: 'order.status_updated' as never })).toBeNull();
   });
 });
 

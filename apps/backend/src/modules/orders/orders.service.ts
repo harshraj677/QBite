@@ -3,6 +3,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 import { Types } from 'mongoose';
 
 import { AuditLogService } from '@modules/audit/audit-log.service';
+import type { AuditAction } from '@modules/audit/audit-log.types';
 import { CanteensService } from '@modules/canteens/canteens.service';
 import { MenuCategoriesService } from '@modules/menu/menu-categories.service';
 import { MenuItemsService } from '@modules/menu/menu-items.service';
@@ -23,6 +24,7 @@ import {
   FORWARD_TRANSITIONS,
   ORDER_TAX_RATE_PERCENT,
 } from './orders.constants';
+import type { OrderSortableField } from './orders.constants';
 import type { IOrder, OrderStatus, PublicOrderDto } from './order.types';
 import { toPublicOrderDto } from './order.types';
 import type {
@@ -66,6 +68,38 @@ function generateOrderNumber(): string {
 /** Not a secret — shown by the student and read back by kitchen staff at the pickup counter, same threat model as a queue-number ticket. 6 digits, easy to read off a phone screen. */
 function generatePickupToken(): string {
   return randomInt(100000, 1_000_000).toString();
+}
+
+/**
+ * Per-transition audit action names — replaces the single generic
+ * `order.status_updated` this method used before the Kitchen Workflow
+ * phase (see ARCHITECTURE.md §3.1's `modules/kitchen` note for the
+ * full justification: Kitchen's endpoints and the direct
+ * `PATCH /orders/:id/status` endpoint both funnel through this same
+ * method, so fixing the naming here — once — gives both callers
+ * precise audit events instead of Kitchen having to log a second,
+ * redundant entry on top of a generic one).
+ *
+ * `newStatus` is typed as the full `OrderStatus` for this private
+ * helper's caller's convenience, but by the time it's invoked
+ * `FORWARD_TRANSITIONS[existing.status].includes(newStatus)` has
+ * already guaranteed it's one of these four — `pending`/`cancelled`
+ * never appear as a *value* in that map, only as keys with empty
+ * transition lists. The default branch is defensive, not reachable.
+ */
+function statusUpdateAuditAction(newStatus: OrderStatus): AuditAction {
+  switch (newStatus) {
+    case 'accepted':
+      return 'order.accepted';
+    case 'preparing':
+      return 'order.preparing';
+    case 'ready':
+      return 'order.ready';
+    case 'completed':
+      return 'order.completed';
+    default:
+      throw new InternalServerError(`No audit action mapped for order status "${newStatus}".`);
+  }
 }
 
 /**
@@ -246,6 +280,31 @@ export class OrdersService {
     return { orders: result.orders.map(toPublicOrderDto), total: result.total };
   }
 
+  /**
+   * Unscoped by canteen or student — added for the Kitchen Workflow
+   * phase's dashboard (`GET /kitchen/orders`), which lists orders
+   * across every canteen (kitchen_staff accounts aren't scoped to one
+   * — see ARCHITECTURE.md §3.1's known-limitation note under
+   * `modules/orders`). Takes a plain options object rather than a
+   * Zod-inferred query type: the endpoint and its request shape are
+   * owned by whichever module calls this (today, `modules/kitchen`),
+   * not by `orders.validation.ts` — this method's only job is the data
+   * fetch + business rules already governing `orders`, which do
+   * belong here.
+   */
+  async searchOrders(options: {
+    status?: OrderStatus;
+    orderNumber?: string;
+    pickupToken?: string;
+    page: number;
+    limit: number;
+    sortBy: OrderSortableField;
+    sortOrder: 'asc' | 'desc';
+  }): Promise<PublicOrderListResult> {
+    const result = await this.ordersRepository.search(options);
+    return { orders: result.orders.map(toPublicOrderDto), total: result.total };
+  }
+
   async updateStatus(
     id: string,
     newStatus: OrderStatus,
@@ -279,7 +338,7 @@ export class OrdersService {
     await this.auditLogService.record({
       actorId: new Types.ObjectId(actor.id),
       actorRole: actor.role,
-      action: 'order.status_updated',
+      action: statusUpdateAuditAction(newStatus),
       success: true,
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,

@@ -122,6 +122,32 @@ describe('OrdersRepository.search / findByStudent / findByCanteen', () => {
     expect(result.total).toBe(1);
   });
 
+  // Regression coverage for the Kitchen Workflow phase — pickupToken
+  // is a new filter on this shared search(), added for the kitchen
+  // dashboard (OrdersService.searchOrders), and exercised here with no
+  // studentId/canteenId at all, matching that unscoped-across-canteens
+  // use case.
+  it('filters by pickupToken with no studentId/canteenId scoping', async () => {
+    const target = await repository.findByStudent(studentId, {
+      orderNumber: 'QB-AAAAAA',
+      page: 1,
+      limit: 1,
+      sortBy: 'createdAt',
+      sortOrder: 'asc',
+    });
+
+    const result = await repository.search({
+      pickupToken: target.orders[0].pickupToken,
+      page: 1,
+      limit: 10,
+      sortBy: 'createdAt',
+      sortOrder: 'asc',
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.orders[0].orderNumber).toBe('QB-AAAAAA');
+  });
+
   it('filters by status', async () => {
     const all = await repository.findByStudent(studentId, {
       page: 1,

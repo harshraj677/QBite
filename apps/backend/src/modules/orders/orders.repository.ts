@@ -25,6 +25,8 @@ export interface SearchOrdersOptions {
   studentId?: string | Types.ObjectId;
   canteenId?: string | Types.ObjectId;
   orderNumber?: string;
+  /** Added for the Kitchen Workflow phase's dashboard filter — see OrdersService.searchOrders. Exact match; pickupToken is a plain, non-hashed 6-digit code (see order.types.ts), so no lookup helper beyond a straight equality filter is needed. */
+  pickupToken?: string;
   status?: OrderStatus;
   dateFrom?: Date;
   dateTo?: Date;
@@ -93,6 +95,7 @@ export class OrdersRepository {
     if (options.studentId !== undefined) filter.studentId = options.studentId;
     if (options.canteenId !== undefined) filter.canteenId = options.canteenId;
     if (options.orderNumber) filter.orderNumber = options.orderNumber;
+    if (options.pickupToken) filter.pickupToken = options.pickupToken;
     if (options.status) filter.status = options.status;
     if (options.dateFrom || options.dateTo) {
       const createdAt: Record<string, Date> = {};
