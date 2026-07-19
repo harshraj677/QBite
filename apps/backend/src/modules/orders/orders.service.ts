@@ -7,6 +7,8 @@ import type { AuditAction } from '@modules/audit/audit-log.types';
 import { CanteensService } from '@modules/canteens/canteens.service';
 import { MenuCategoriesService } from '@modules/menu/menu-categories.service';
 import { MenuItemsService } from '@modules/menu/menu-items.service';
+import { NotificationsService } from '@modules/notifications/notifications.service';
+import type { NotificationType } from '@modules/notifications/notification.types';
 import type { UserRole } from '@modules/users/user.types';
 import {
   ConflictError,
@@ -103,10 +105,33 @@ function statusUpdateAuditAction(newStatus: OrderStatus): AuditAction {
 }
 
 /**
+ * Same exhaustiveness contract as `statusUpdateAuditAction` above —
+ * added for the Notifications phase (see ARCHITECTURE.md §3.1's
+ * `modules/notifications` note). Kept as its own function rather than
+ * folded into `statusUpdateAuditAction` because the two produce
+ * values for different modules' closed enums; a shared helper would
+ * couple `AuditAction` and `NotificationType` for no reason.
+ */
+function statusNotificationType(newStatus: OrderStatus): NotificationType {
+  switch (newStatus) {
+    case 'accepted':
+      return 'order_accepted';
+    case 'preparing':
+      return 'order_preparing';
+    case 'ready':
+      return 'order_ready';
+    case 'completed':
+      return 'order_completed';
+    default:
+      throw new InternalServerError(`No notification type mapped for order status "${newStatus}".`);
+  }
+}
+
+/**
  * Business rules for `orders`/`order_items`. Depends on its own two
  * repositories, `CanteensService`/`MenuCategoriesService`/
- * `MenuItemsService` (cross-module, via their public services — never
- * a repository), and `AuditLogService`.
+ * `MenuItemsService`/`NotificationsService` (cross-module, via their
+ * public services — never a repository), and `AuditLogService`.
  */
 export class OrdersService {
   constructor(
@@ -116,6 +141,7 @@ export class OrdersService {
     private readonly menuCategoriesService: MenuCategoriesService = new MenuCategoriesService(),
     private readonly menuItemsService: MenuItemsService = new MenuItemsService(),
     private readonly auditLogService: AuditLogService = new AuditLogService(),
+    private readonly notificationsService: NotificationsService = new NotificationsService(),
   ) {}
 
   /**
@@ -232,6 +258,13 @@ export class OrdersService {
       metadata: { orderId: order._id.toString(), canteenId, totalAmount },
     });
 
+    await this.notificationsService.notifyOrderEvent({
+      userId: order.studentId,
+      type: 'order_placed',
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+    });
+
     return { ...toPublicOrderDto(order), items: createdItems.map(toPublicOrderItemDto) };
   }
 
@@ -345,6 +378,14 @@ export class OrdersService {
       metadata: { orderId: id, fromStatus: existing.status, toStatus: newStatus },
     });
 
+    await this.notificationsService.notifyOrderEvent({
+      userId: updated.studentId,
+      type: statusNotificationType(newStatus),
+      orderId: updated._id,
+      orderNumber: updated.orderNumber,
+      pickupToken: updated.pickupToken,
+    });
+
     return toPublicOrderDto(updated);
   }
 
@@ -403,6 +444,14 @@ export class OrdersService {
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
       metadata: { orderId: id, reason },
+    });
+
+    await this.notificationsService.notifyOrderEvent({
+      userId: updated.studentId,
+      type: 'order_cancelled',
+      orderId: updated._id,
+      orderNumber: updated.orderNumber,
+      cancellationReason: reason,
     });
 
     return toPublicOrderDto(updated);

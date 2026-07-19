@@ -360,6 +360,27 @@ The single most important field is `itemSnapshot` — frozen at order-creation t
 
 **Indexes:** `{orderId}` — the only query pattern this collection serves is "every line item for order X".
 
+### 2.19 `notifications`
+
+Owned by `modules/notifications/` (Notifications phase) — **supersedes** the stale §2.8 `notifications` sketch above (same relationship as §2.17 `orders` to §2.4, §2.16 `menu_items` to §2.3): that sketch's `body`/`relatedOrderId`/TTL-indexed fields and open-ended `type` (`order_update`, `promo`, `payment`, ...) don't match this phase's spec, which calls for a closed 6-value `type` enum and no TTL expiry. This is the real, implemented collection.
+
+In-app only for this phase — no Firebase push delivery yet (`FCM_*` env vars are unused placeholders). Every document is created by `OrdersService` calling `NotificationsService.notifyOrderEvent(...)` (see [ARCHITECTURE.md §3.1](./ARCHITECTURE.md#31-pattern-modular-monolith)'s `modules/notifications` note) — there is no user-facing "create a notification" endpoint, only read/manage ones.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `userId` | ObjectId (ref `users`) | Always the order's `studentId` in this phase — every `notifyOrderEvent` call targets the placing student, regardless of which role (student/kitchen_staff/admin) triggered the underlying transition. |
+| `title` | String | e.g. "Order Accepted". |
+| `message` | String | e.g. "Your order QB-2026-A1B2C3D4 has been accepted by the kitchen." |
+| `type` | Enum | `order_placed \| order_accepted \| order_preparing \| order_ready \| order_completed \| order_cancelled`. Closed set, same rationale as every other enum in this project. |
+| `orderId` | ObjectId? (ref `orders`) | Optional in the schema (a notification isn't inherently order-related forever), always populated by the current, sole producer. |
+| `isRead` | Boolean | Default `false`. No state-machine guard on this field (unlike `orders.status`) — marking an already-read notification read again is a harmless no-op. |
+| `createdAt` / `updatedAt` | Date | |
+
+No soft-delete fields — `DELETE /notifications/:id` is a real, hard delete. Unlike `orders` (where "immutable order history" is an explicit requirement), a notification is an ephemeral, user-manageable inbox item with no historical-record requirement; a genuine delete is the correct semantic.
+
+**Indexes:** `{userId, createdAt: -1}` (a user's own feed, most recent first); `{userId, isRead: 1}` (the unread-count badge and "unread only" filtering).
+
 ---
 
 ## 3. Relationships — Embedding vs. Referencing Rationale

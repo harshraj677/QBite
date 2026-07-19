@@ -10,6 +10,7 @@ import type { AuditLogService } from '@modules/audit/audit-log.service';
 import type { CanteensService } from '@modules/canteens/canteens.service';
 import type { MenuCategoriesService } from '@modules/menu/menu-categories.service';
 import type { MenuItemsService } from '@modules/menu/menu-items.service';
+import type { NotificationsService } from '@modules/notifications/notifications.service';
 import { OrdersService } from './orders.service';
 import type { OrderItemsRepository } from './order-items.repository';
 import type { OrdersRepository } from './orders.repository';
@@ -118,6 +119,12 @@ function makeMockAuditLogService(): jest.Mocked<AuditLogService> {
   } as unknown as jest.Mocked<AuditLogService>;
 }
 
+function makeMockNotificationsService(): jest.Mocked<NotificationsService> {
+  return {
+    notifyOrderEvent: jest.fn().mockResolvedValue(undefined),
+  } as unknown as jest.Mocked<NotificationsService>;
+}
+
 function makeService(
   overrides: {
     ordersRepo?: jest.Mocked<OrdersRepository>;
@@ -126,6 +133,7 @@ function makeService(
     categoriesService?: jest.Mocked<MenuCategoriesService>;
     itemsService?: jest.Mocked<MenuItemsService>;
     auditLogService?: jest.Mocked<AuditLogService>;
+    notificationsService?: jest.Mocked<NotificationsService>;
   } = {},
 ) {
   const ordersRepo = overrides.ordersRepo ?? makeMockOrdersRepository();
@@ -134,6 +142,7 @@ function makeService(
   const categoriesService = overrides.categoriesService ?? makeMockMenuCategoriesService();
   const itemsService = overrides.itemsService ?? makeMockMenuItemsService();
   const auditLogService = overrides.auditLogService ?? makeMockAuditLogService();
+  const notificationsService = overrides.notificationsService ?? makeMockNotificationsService();
   return {
     service: new OrdersService(
       ordersRepo,
@@ -142,6 +151,7 @@ function makeService(
       categoriesService,
       itemsService,
       auditLogService,
+      notificationsService,
     ),
     ordersRepo,
     orderItemsRepo,
@@ -149,6 +159,7 @@ function makeService(
     categoriesService,
     itemsService,
     auditLogService,
+    notificationsService,
   };
 }
 
@@ -171,6 +182,27 @@ describe('OrdersService.placeOrder', () => {
     expect(result.items).toHaveLength(1);
     expect(auditLogService.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'order.created', success: true }),
+    );
+  });
+
+  // Regression coverage for the Notifications phase's integration:
+  // placeOrder must notify the placing student — see
+  // ARCHITECTURE.md §3.1's `modules/notifications` note.
+  it('notifies the placing student with type order_placed', async () => {
+    const { service, ordersRepo, orderItemsRepo, notificationsService } = makeService();
+    orderItemsRepo.createMany.mockResolvedValue([makeOrderItem()]);
+    const order = makeOrder();
+    ordersRepo.create.mockResolvedValue(order);
+
+    await service.placeOrder(canteenId, validInput, student, meta);
+
+    expect(notificationsService.notifyOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: order.studentId,
+        type: 'order_placed',
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+      }),
     );
   });
 
@@ -385,6 +417,36 @@ describe('OrdersService.updateStatus', () => {
     );
   });
 
+  // Regression coverage for the Notifications phase's integration —
+  // same per-transition mapping as the audit-action test above, but
+  // for notifyOrderEvent (see orders.service.ts's statusNotificationType).
+  it.each([
+    ['pending', 'accepted', 'order_accepted'],
+    ['accepted', 'preparing', 'order_preparing'],
+    ['preparing', 'ready', 'order_ready'],
+    ['ready', 'completed', 'order_completed'],
+  ] as const)('notifies the student of %s -> %s as %s', async (from, to, expectedType) => {
+    const { service, ordersRepo, notificationsService } = makeService();
+    const order = makeOrder({ status: from });
+    ordersRepo.findById.mockResolvedValue(order);
+    ordersRepo.updateStatus.mockResolvedValue(makeOrder({ status: to }));
+
+    await service.updateStatus('id', to, admin, meta);
+
+    expect(notificationsService.notifyOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: order.studentId, type: expectedType }),
+    );
+  });
+
+  it('does not notify when the transition is rejected', async () => {
+    const { service, ordersRepo, notificationsService } = makeService();
+    ordersRepo.findById.mockResolvedValue(makeOrder({ status: 'pending' }));
+
+    await expect(service.updateStatus('id', 'ready', admin, meta)).rejects.toBeDefined();
+
+    expect(notificationsService.notifyOrderEvent).not.toHaveBeenCalled();
+  });
+
   it('rejects an invalid transition (skipping a stage)', async () => {
     const { service, ordersRepo } = makeService();
     ordersRepo.findById.mockResolvedValue(makeOrder({ status: 'pending' }));
@@ -444,6 +506,24 @@ describe('OrdersService.cancelOrder', () => {
     expect(result.status).toBe('cancelled');
     expect(auditLogService.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'order.cancelled' }),
+    );
+  });
+
+  // Regression coverage for the Notifications phase's integration.
+  it('notifies the student with type order_cancelled and the reason', async () => {
+    const { service, ordersRepo, notificationsService } = makeService();
+    const order = makeOrder({ status: 'pending' });
+    ordersRepo.findById.mockResolvedValue(order);
+    ordersRepo.cancelOrder.mockResolvedValue(makeOrder({ status: 'cancelled' }));
+
+    await service.cancelOrder('id', 'Changed my mind', student, meta);
+
+    expect(notificationsService.notifyOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: order.studentId,
+        type: 'order_cancelled',
+        cancellationReason: 'Changed my mind',
+      }),
     );
   });
 
