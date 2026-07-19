@@ -7,6 +7,7 @@ import { menuCategoriesRouter } from '@modules/menu/menu-categories.routes';
 import { menuItemsRouter } from '@modules/menu/menu-items.routes';
 import { notificationsRouter } from '@modules/notifications/notifications.routes';
 import { ordersRouter } from '@modules/orders/orders.routes';
+import { paymentsRouter } from '@modules/payments/payments.routes';
 
 /**
  * API v1 mount point (docs/API_SPECIFICATION.md §7 — URI-based
@@ -38,3 +39,4 @@ v1Router.use('/', menuItemsRouter);
 v1Router.use('/', ordersRouter);
 v1Router.use('/kitchen', kitchenRouter);
 v1Router.use('/notifications', notificationsRouter);
+v1Router.use('/payments', paymentsRouter);

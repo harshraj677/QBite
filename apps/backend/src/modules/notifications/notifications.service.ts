@@ -21,6 +21,15 @@ export interface NotifyOrderEventInput {
   pickupToken?: string;
   /** Only meaningful for `order_cancelled`. */
   cancellationReason?: string;
+  /** Only meaningful for `payment_success`/`payment_refunded` — integer paise, formatted into the message as rupees. */
+  amount?: number;
+  /** Only meaningful for `payment_failed`. */
+  failureReason?: string;
+}
+
+/** Integer paise -> "₹249.00". Local to this file — the only place a notification message ever renders money as text; every other module keeps amounts as raw paise integers (see docs/DATABASE_DESIGN.md §6). */
+function formatRupees(amountInPaise: number): string {
+  return `₹${(amountInPaise / 100).toFixed(2)}`;
 }
 
 /** One line per NotificationType — kept as a plain lookup, not a switch, since every branch has the identical (title, message) shape and no branch needs special control flow. */
@@ -62,6 +71,29 @@ function buildNotificationContent(input: NotifyOrderEventInput): {
         message: input.cancellationReason
           ? `Your order ${input.orderNumber} has been cancelled. Reason: ${input.cancellationReason}`
           : `Your order ${input.orderNumber} has been cancelled.`,
+      };
+    case 'payment_success':
+      return {
+        title: 'Payment Successful',
+        message:
+          input.amount !== undefined
+            ? `${formatRupees(input.amount)} received for order ${input.orderNumber}.`
+            : `Payment received for order ${input.orderNumber}.`,
+      };
+    case 'payment_failed':
+      return {
+        title: 'Payment Failed',
+        message: input.failureReason
+          ? `Payment for order ${input.orderNumber} failed. Reason: ${input.failureReason}`
+          : `Payment for order ${input.orderNumber} failed. Please try again.`,
+      };
+    case 'payment_refunded':
+      return {
+        title: 'Payment Refunded',
+        message:
+          input.amount !== undefined
+            ? `${formatRupees(input.amount)} refunded for order ${input.orderNumber}.`
+            : `Payment refunded for order ${input.orderNumber}.`,
       };
   }
 }

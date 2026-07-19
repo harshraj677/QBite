@@ -27,7 +27,7 @@ import {
   ORDER_TAX_RATE_PERCENT,
 } from './orders.constants';
 import type { OrderSortableField } from './orders.constants';
-import type { IOrder, OrderStatus, PublicOrderDto } from './order.types';
+import type { IOrder, OrderStatus, PaymentStatus, PublicOrderDto } from './order.types';
 import { toPublicOrderDto } from './order.types';
 import type {
   CreateOrderInput,
@@ -454,6 +454,27 @@ export class OrdersService {
       cancellationReason: reason,
     });
 
+    return toPublicOrderDto(updated);
+  }
+
+  /**
+   * Added for the Payments phase — `modules/payments`'s only write
+   * path into `orders/`. A pure data mutation with no audit/
+   * notification side effects of its own (unlike `updateStatus`/
+   * `cancelOrder` above): the caller (`PaymentsService`) already
+   * audits and notifies around the payment event that triggers this,
+   * so doing it again here would duplicate both. See
+   * `OrdersRepository.updatePaymentStatus`'s doc comment for why the
+   * underlying update has no transition guard of its own.
+   */
+  async updatePaymentStatus(
+    orderId: string,
+    paymentStatus: PaymentStatus,
+  ): Promise<PublicOrderDto> {
+    const updated = await this.ordersRepository.updatePaymentStatus(orderId, paymentStatus);
+    if (!updated) {
+      throw new NotFoundError('ORDER_NOT_FOUND', 'Order not found.');
+    }
     return toPublicOrderDto(updated);
   }
 }

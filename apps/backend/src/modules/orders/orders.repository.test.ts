@@ -255,3 +255,28 @@ describe('OrdersRepository.cancelOrder', () => {
     expect(result).toBeNull();
   });
 });
+
+// Regression coverage for the Payments phase's integration.
+describe('OrdersRepository.updatePaymentStatus', () => {
+  it('sets the order paymentStatus', async () => {
+    const created = await repository.create(makeInput());
+    expect(created.paymentStatus).toBe('pending');
+
+    const updated = await repository.updatePaymentStatus(created._id, 'paid');
+
+    expect(updated?.paymentStatus).toBe('paid');
+  });
+
+  it('does not touch the order status field', async () => {
+    const created = await repository.create(makeInput());
+
+    const updated = await repository.updatePaymentStatus(created._id, 'paid');
+
+    expect(updated?.status).toBe('pending');
+  });
+
+  it('returns null for a non-existent id', async () => {
+    const result = await repository.updatePaymentStatus(new Types.ObjectId(), 'paid');
+    expect(result).toBeNull();
+  });
+});

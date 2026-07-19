@@ -329,8 +329,8 @@ No soft-delete fields and no `createdBy` — deliberate. The phase spec requires
 | `canteenId` | ObjectId (ref `canteens`) | |
 | `studentId` | ObjectId (ref `users`) | The placing student — doubles as the "createdBy" this collection otherwise omits. |
 | `status` | Enum | `pending \| accepted \| preparing \| ready \| completed \| cancelled`. Forward pipeline plus one terminal side branch — see `orders.constants.ts`'s `FORWARD_TRANSITIONS`. `completed`/`cancelled` are immutable; nothing on an order in either state is ever written again. |
-| `paymentStatus` | Enum | `pending \| paid \| failed \| refunded`. Independent of `status` — no payment gateway is integrated yet (Razorpay env vars exist, no `payments` module built), so this is write-once at creation and nothing in this module ever transitions it. Reserved for a future Payments module. |
-| `paymentMethod` | Enum | `cash \| online`. `cash` = settled at the pickup counter; `online` is a placeholder for the future Razorpay integration — no gateway call happens either way in this phase. |
+| `paymentStatus` | Enum | `pending \| paid \| failed \| refunded`. Independent of `status`. As of the Payments phase, `online` orders are transitioned by `OrdersService.updatePaymentStatus` — the one write path `modules/payments/` has into this collection (see [ARCHITECTURE.md §3.1](./ARCHITECTURE.md#31-pattern-modular-monolith)'s `modules/payments` note) — to `paid` on a verified Razorpay payment and `refunded` on a processed refund; `cash` orders are unaffected and remain write-once at creation, settled at the pickup counter instead. |
+| `paymentMethod` | Enum | `cash \| online`. `cash` = settled at the pickup counter, no gateway involvement. `online` = paid via Razorpay through `modules/payments/` — see §2.20. |
 | `subtotal` / `tax` / `discount` / `totalAmount` | Number (integer, paise) | Server-computed only — see §6's money convention. `subtotal` = sum of every `order_items.totalPrice`. `tax` = `subtotal * ORDER_TAX_RATE_PERCENT / 100`, and that rate is currently **0** — no tax/GST policy is documented anywhere in this project (checked QBite_SRS_PRD.md and this file), so a real number was not invented; the field is fully wired up for when one is supplied. `discount` is always 0 — no coupon module exists yet. `totalAmount = subtotal + tax - discount`. The client can send none of these; `orders.validation.ts`'s `createOrderSchema` simply has no field for them. |
 | `pickupToken` | String | Unique indexed, 6-digit numeric, plain (not hashed). Shown by the student and read back by kitchen staff at the pickup counter — same threat model as a queue-number ticket, not a password-reset token. |
 | `estimatedReadyTimeMinutes` | Number | `max()` of the ordered items' `preparationTimeMinutes`, not the sum — a kitchen prepares an order's items in parallel, not sequentially. |
@@ -380,6 +380,31 @@ In-app only for this phase — no Firebase push delivery yet (`FCM_*` env vars a
 No soft-delete fields — `DELETE /notifications/:id` is a real, hard delete. Unlike `orders` (where "immutable order history" is an explicit requirement), a notification is an ephemeral, user-manageable inbox item with no historical-record requirement; a genuine delete is the correct semantic.
 
 **Indexes:** `{userId, createdAt: -1}` (a user's own feed, most recent first); `{userId, isRead: 1}` (the unread-count badge and "unread only" filtering).
+
+### 2.20 `payments`
+
+Owned by `modules/payments/` (Payments/Razorpay phase) — **supersedes** the stale §2.5 `payments` sketch above (same relationship as §2.17 `orders` to §2.4): that sketch's `webhookVerifiedAt`/embedded `refunds` array and `created \| verified \| failed` status enum don't match this phase's spec, which calls for a 5-value forward-only status enum (including `PENDING`/`REFUNDED` as first-class states, not an embedded array) and a single flat `refundedAmount` field. This is the real, implemented collection — notably, the original sketch's `razorpayOrderId`/`razorpayPaymentId`/`razorpaySignature`/paise-`amount` fields *did* anticipate Razorpay correctly and needed no reconciliation.
+
+Never soft-deleted — same rationale as `orders`/`order_items`: a payment record is a financial audit trail, so every attempt (including failed ones) is kept forever, never deleted or overwritten beyond its status/extra fields.
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | ObjectId | |
+| `orderId` | ObjectId (ref `orders`) | Not unique alone — a student may retry after a `FAILED` attempt, so one order can have multiple `Payment` documents over time. See the partial unique index below for what *is* enforced. |
+| `userId` | ObjectId (ref `users`) | The order's own student — copied here (rather than joined through `orderId` on every access check) so `PaymentsService` can authorize a request without an extra `orders` lookup in the common case. |
+| `razorpayOrderId` | String | Set at creation from `RazorpayClient.createOrder`'s response. Indexed — the correlation key for `POST /payments/verify` and the `payment.captured`/`payment.failed` webhooks. |
+| `razorpayPaymentId` | String? | Set once Razorpay reports an actual payment attempt (`/verify`'s body, or a webhook's `payment.entity.id`). Indexed — the correlation key for the `refund.processed` webhook, which carries the payment id, not the order id. |
+| `razorpaySignature` | String? | Stored for audit; **never returned to the client** (`PublicPaymentDto` omits it — same "sensitive credential-adjacent field excluded from the DTO" convention as `passwordHash` on `PublicUserDto`). |
+| `amount` | Number (integer, paise) | Always copied from `Order.totalAmount` at creation — see §6's money convention. Never accepted from the client; `createPaymentOrderSchema` has no `amount` field to send one. |
+| `currency` | String | `INR` for every payment created by this phase — no multi-currency requirement exists. |
+| `status` | Enum | `CREATED \| PENDING \| SUCCESS \| FAILED \| REFUNDED`. Forward-only, enforced in the service layer via `payments.constants.ts`'s `PAYMENT_FORWARD_TRANSITIONS` and atomically at the repository layer (`updateStatus`'s filter re-asserts the expected current status, same pattern as `orders.status`). `PENDING` exists for gateway flows that report an intermediate "authorized, not yet captured" state before settling; the synchronous `/verify` flow skips straight from `CREATED` to `SUCCESS`/`FAILED`. |
+| `paymentMethod` | String? | Razorpay's own vocabulary (`card`, `upi`, `netbanking`, `wallet`, `emi`, ...) — not modeled as a closed enum, since that vocabulary isn't ours to constrain; populated from Razorpay's response/webhook payload when available. |
+| `transactionId` | String? | External settlement reference (e.g. a bank RRN), when Razorpay provides one — distinct from `razorpayPaymentId`. |
+| `failureReason` | String? | Set on `FAILED` — either "Signature verification failed" (the `/verify` path) or Razorpay's own `error_description` (the `payment.failed` webhook path). |
+| `refundedAmount` | Number? (integer, paise) | Set on `REFUNDED`, from the `refund.processed` webhook's payload. May be less than `amount` for a partial refund — no separate embedded refunds array, unlike the superseded §2.5 sketch, since this phase has no partial-refund workflow of its own to track multiple refund events per payment. |
+| `createdAt` / `updatedAt` | Date | |
+
+**Indexes:** `{razorpayOrderId}`; `{razorpayPaymentId}`; `{orderId, createdAt: -1}` (every attempt for an order, most recent first — `PaymentsRepository.findByOrderId`). **`{orderId: 1, status: 1}`, unique, partial (`status: 'SUCCESS'`)** — the actual database-level guarantee behind "each order can have only one successful payment"; a service-layer pre-check (`existsSuccessForOrder`) exists only for a faster, clearer error message before this index would reject the write (see [ARCHITECTURE.md §3.1](./ARCHITECTURE.md#31-pattern-modular-monolith)'s `modules/payments` note).
 
 ---
 

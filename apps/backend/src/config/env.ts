@@ -77,6 +77,35 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => (value ? value : undefined)),
+
+  // Payments phase — first real consumer of these three (previously
+  // unused placeholders in .env.example only, not validated here).
+  // KEY_ID/KEY_SECRET authenticate server-to-Razorpay REST calls
+  // (Basic auth); WEBHOOK_SECRET is a *separate* secret configured in
+  // the Razorpay dashboard, used only to verify the HMAC signature on
+  // incoming POST /payments/webhook requests — never sent by us,
+  // never derived from KEY_SECRET.
+  //
+  // Plain `.default(...)` (the pattern JWT_ACCESS_SECRET/etc. above
+  // use) doesn't work here: the real apps/backend/.env this project
+  // runs against already declares these three present-but-blank
+  // (`RAZORPAY_KEY_ID=`, from before any module consumed them) — the
+  // same COLLEGE_EMAIL_DOMAIN trap above, on fields that need an
+  // actual fallback value rather than `undefined`. The transform
+  // normalizes "absent" and "present but empty" to the same
+  // placeholder before `.default()` would ever see either.
+  RAZORPAY_KEY_ID: z
+    .string()
+    .optional()
+    .transform((value) => (value ? value : 'dev-placeholder-razorpay-key-id')),
+  RAZORPAY_KEY_SECRET: z
+    .string()
+    .optional()
+    .transform((value) => (value ? value : 'dev-placeholder-razorpay-key-secret')),
+  RAZORPAY_WEBHOOK_SECRET: z
+    .string()
+    .optional()
+    .transform((value) => (value ? value : 'dev-placeholder-razorpay-webhook-secret')),
 });
 
 function loadConfig() {
@@ -110,6 +139,11 @@ function loadConfig() {
     },
     logLevel: raw.LOG_LEVEL,
     collegeEmailDomain: raw.COLLEGE_EMAIL_DOMAIN,
+    razorpay: {
+      keyId: raw.RAZORPAY_KEY_ID,
+      keySecret: raw.RAZORPAY_KEY_SECRET,
+      webhookSecret: raw.RAZORPAY_WEBHOOK_SECRET,
+    },
   };
 }
 
@@ -121,5 +155,18 @@ if (env.nodeEnv === 'production') {
   const placeholders = ['dev-placeholder-access-secret', 'dev-placeholder-refresh-secret'];
   if (placeholders.includes(env.jwt.accessSecret) || placeholders.includes(env.jwt.refreshSecret)) {
     throw new Error('Refusing to start: placeholder JWT secrets detected in production.');
+  }
+
+  const razorpayPlaceholders = [
+    'dev-placeholder-razorpay-key-id',
+    'dev-placeholder-razorpay-key-secret',
+    'dev-placeholder-razorpay-webhook-secret',
+  ];
+  if (
+    razorpayPlaceholders.includes(env.razorpay.keyId) ||
+    razorpayPlaceholders.includes(env.razorpay.keySecret) ||
+    razorpayPlaceholders.includes(env.razorpay.webhookSecret)
+  ) {
+    throw new Error('Refusing to start: placeholder Razorpay credentials detected in production.');
   }
 }

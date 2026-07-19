@@ -6,6 +6,12 @@ import type { Document, Types } from 'mongoose';
  * comment). Closed set, same rationale as every other enum in this
  * project (AUDIT_ACTIONS, ORDER_STATUSES, ...): a typo can't silently
  * create an untracked type.
+ *
+ * `payment_*` entries added for the Payments phase — `notifyOrderEvent`
+ * already took a generic `type: NotificationType` (see
+ * notifications.service.ts), so extending this enum plus
+ * `buildNotificationContent`'s switch was the entire integration;
+ * no new method was needed.
  */
 export const NOTIFICATION_TYPES = [
   'order_placed',
@@ -14,6 +20,9 @@ export const NOTIFICATION_TYPES = [
   'order_ready',
   'order_completed',
   'order_cancelled',
+  'payment_success',
+  'payment_failed',
+  'payment_refunded',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

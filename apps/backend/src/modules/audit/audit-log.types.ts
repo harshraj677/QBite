@@ -54,6 +54,12 @@ export const AUDIT_ACTIONS = [
   'order.ready',
   'order.completed',
   'order.cancelled',
+  // payment — one action per PaymentStatus value, lowercased
+  // (mirrors `order.accepted`/etc.'s direct status->action mapping).
+  'payment.created',
+  'payment.success',
+  'payment.failed',
+  'payment.refunded',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

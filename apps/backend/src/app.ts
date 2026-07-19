@@ -1,7 +1,7 @@
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import express, { type Express } from 'express';
+import express, { type Express, type Request } from 'express';
 
 import { env } from '@config/env';
 import { mountApiDocs } from '@config/swagger';
@@ -41,6 +41,22 @@ import { v1Router } from '@api/v1';
  * of this global chain by each module as it's built (see
  * validation/validate-request.middleware.ts) — they are not part of
  * this global pipeline.
+ *
+ * **One addition, added for the Payments phase, strictly required for
+ * integration:** `express.json()`'s `verify` callback captures the
+ * exact raw request bytes onto `req.rawBody` (see
+ * `modules/payments/raw-body.types.ts` for the `Request` type
+ * augmentation) — needed because Razorpay webhook signature
+ * verification is an HMAC over the literal bytes Razorpay sent, and
+ * `JSON.stringify(req.body)` is not guaranteed to reproduce those
+ * bytes exactly. This runs for every request, on every route, but is
+ * a pure side-effect capture with no behavioral change to normal JSON
+ * parsing — `req.body` is populated identically to before for every
+ * route that doesn't read `req.rawBody`, which is every route except
+ * `POST /payments/webhook`. The full pre-existing test suite (587
+ * tests as of the previous phase, all exercising this exact global
+ * middleware chain via real HTTP requests) passing unchanged is the
+ * regression proof for that.
  */
 export function createApp(): Express {
   const app = express();
@@ -55,7 +71,17 @@ export function createApp(): Express {
 
   app.use(compression());
   app.use(cookieParser());
-  app.use(express.json());
+  app.use(
+    express.json({
+      // `req` here is typed as plain `http.IncomingMessage` by
+      // body-parser's types (not Express's augmented `Request`), even
+      // though it's the same object at runtime — the cast is only for
+      // the type checker.
+      verify: (req, _res, buf) => {
+        (req as Request).rawBody = Buffer.from(buf);
+      },
+    }),
+  );
   app.use(express.urlencoded({ extended: true }));
 
   app.use(sanitizeInput());

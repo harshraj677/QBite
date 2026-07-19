@@ -77,3 +77,39 @@ describe('env — renamed variables (environment-configuration phase)', () => {
     expect(overridden.logLevel).toBe('debug');
   });
 });
+
+describe('env — RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET / RAZORPAY_WEBHOOK_SECRET (Payments phase)', () => {
+  // Regression test for the same bug class as COLLEGE_EMAIL_DOMAIN
+  // above, hit again immediately: the real apps/backend/.env already
+  // declared these three present-but-blank (`RAZORPAY_KEY_ID=`) from
+  // before any module consumed them, and plain `.default(...)` only
+  // fires on `undefined`, not `''` — so adding these with the same
+  // `.default(...)` pattern JWT_ACCESS_SECRET uses broke startup
+  // immediately (`npx jest` failed with "Too small: expected string
+  // to have >=1 characters" for all three) until this transform was
+  // added.
+  it('falls back to the dev placeholder when present but empty, not just when absent', () => {
+    const env = loadEnvWith({
+      RAZORPAY_KEY_ID: '',
+      RAZORPAY_KEY_SECRET: '',
+      RAZORPAY_WEBHOOK_SECRET: '',
+    });
+    expect(env.razorpay.keyId).toBe('dev-placeholder-razorpay-key-id');
+    expect(env.razorpay.keySecret).toBe('dev-placeholder-razorpay-key-secret');
+    expect(env.razorpay.webhookSecret).toBe('dev-placeholder-razorpay-webhook-secret');
+  });
+
+  it('falls back to the dev placeholder when absent entirely', () => {
+    const env = loadEnvWith({
+      RAZORPAY_KEY_ID: undefined,
+      RAZORPAY_KEY_SECRET: undefined,
+      RAZORPAY_WEBHOOK_SECRET: undefined,
+    });
+    expect(env.razorpay.keyId).toBe('dev-placeholder-razorpay-key-id');
+  });
+
+  it('keeps a real value unchanged', () => {
+    const env = loadEnvWith({ RAZORPAY_KEY_ID: 'rzp_test_abc123' });
+    expect(env.razorpay.keyId).toBe('rzp_test_abc123');
+  });
+});

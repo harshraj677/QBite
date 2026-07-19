@@ -76,6 +76,7 @@ function makeMockOrdersRepository(): jest.Mocked<OrdersRepository> {
     search: jest.fn(),
     updateStatus: jest.fn(),
     cancelOrder: jest.fn(),
+    updatePaymentStatus: jest.fn(),
   } as unknown as jest.Mocked<OrdersRepository>;
 }
 
@@ -572,5 +573,26 @@ describe('OrdersService.cancelOrder', () => {
     await expect(service.cancelOrder('id', undefined, student, meta)).rejects.toBeInstanceOf(
       NotFoundError,
     );
+  });
+});
+
+// Regression coverage for the Payments phase's integration — this
+// method is modules/payments's only write path into orders/.
+describe('OrdersService.updatePaymentStatus', () => {
+  it('delegates to the repository and returns the updated order', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.updatePaymentStatus.mockResolvedValue(makeOrder({ paymentStatus: 'paid' }));
+
+    const result = await service.updatePaymentStatus('id', 'paid');
+
+    expect(ordersRepo.updatePaymentStatus).toHaveBeenCalledWith('id', 'paid');
+    expect(result.paymentStatus).toBe('paid');
+  });
+
+  it('throws NotFoundError when the order does not exist', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.updatePaymentStatus.mockResolvedValue(null);
+
+    await expect(service.updatePaymentStatus('id', 'paid')).rejects.toBeInstanceOf(NotFoundError);
   });
 });

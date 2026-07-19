@@ -116,6 +116,9 @@ describe('NotificationsService.notifyOrderEvent', () => {
     ['order_ready', 'Order Ready for Pickup'],
     ['order_completed', 'Order Completed'],
     ['order_cancelled', 'Order Cancelled'],
+    ['payment_success', 'Payment Successful'],
+    ['payment_failed', 'Payment Failed'],
+    ['payment_refunded', 'Payment Refunded'],
   ] as const)('writes a %s notification with title "%s"', async (type, expectedTitle) => {
     const { service, repo } = makeService();
     repo.create.mockResolvedValue(makeNotification({ type }));
@@ -158,6 +161,40 @@ describe('NotificationsService.notifyOrderEvent', () => {
 
     expect(repo.create).toHaveBeenCalledWith(
       expect.objectContaining({ message: expect.stringContaining('Out of stock') }),
+    );
+  });
+
+  it('formats the amount as rupees in the payment_success message', async () => {
+    const { service, repo } = makeService();
+    repo.create.mockResolvedValue(makeNotification({ type: 'payment_success' }));
+
+    await service.notifyOrderEvent({
+      userId,
+      type: 'payment_success',
+      orderId,
+      orderNumber: 'QB-2026-AAAAAAAA',
+      amount: 24900,
+    });
+
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('₹249.00') }),
+    );
+  });
+
+  it('includes the failureReason in the payment_failed message when provided', async () => {
+    const { service, repo } = makeService();
+    repo.create.mockResolvedValue(makeNotification({ type: 'payment_failed' }));
+
+    await service.notifyOrderEvent({
+      userId,
+      type: 'payment_failed',
+      orderId,
+      orderNumber: 'QB-2026-AAAAAAAA',
+      failureReason: 'Insufficient funds',
+    });
+
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('Insufficient funds') }),
     );
   });
 
