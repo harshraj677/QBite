@@ -1,8 +1,36 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 
 @custom-variant dark (&:is(.dark *));
+
+/*
+ * ============================================================
+ * QBite Admin — Design Token System
+ * ============================================================
+ * Every color in this file is expressed in OKLCH — a perceptually
+ * uniform color space, so "lighten this 5%" or "the same lightness
+ * as X" actually behaves the way it reads, unlike sRGB/HSL. This is
+ * the same convention the original shadcn scaffold shipped with; we
+ * extend it, not replace it.
+ *
+ * Brand direction: mostly a disciplined neutral (near-black/near-white)
+ * surface — the same restrained palette Linear/Vercel/Stripe use so the
+ * UI never feels "themed" — with exactly one saturated hue (a deep
+ * indigo-violet, ~267°) reserved for primary actions, focus rings,
+ * active navigation, and links. Two extra semantic tokens
+ * (--success/--warning) are added beyond shadcn's default set —
+ * every admin panel in this class of product (order status, payment
+ * status, kitchen state) needs more than just "destructive" as a
+ * non-neutral status color.
+ *
+ * No component file should ever hardcode a color. Every color used
+ * anywhere in this app must resolve to one of the CSS variables below
+ * via a Tailwind utility (bg-primary, text-muted-foreground,
+ * border-warning, etc.) — see docs/DESIGN_SYSTEM.md for the full
+ * usage guide and the accessibility contrast rules each pair below
+ * was chosen to satisfy.
+ */
 
 @theme inline {
   --color-background: var(--background);
@@ -26,7 +54,12 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive: var(--destructive);
+  --color-success-foreground: var(--success-foreground);
+  --color-success: var(--success);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning: var(--warning);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -39,6 +72,9 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* Radius scale — one base token, everything else derived so a
+     single --radius edit re-tunes the whole app consistently. */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -46,75 +82,158 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Elevation scale — deliberately soft and low-contrast (a 2-8%
+     black wash, never a hard drop shadow) so cards read as "raised
+     paper," matching Stripe/Linear rather than early-2010s Material
+     "floating card" shadows. Dark mode overrides these to a subtler
+     variant below since a black shadow on a near-black surface does
+     nothing — dark-mode elevation instead leans on a faint border. */
+  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.04);
+  --shadow-sm: 0 1px 3px 0 oklch(0 0 0 / 0.06), 0 1px 2px -1px oklch(0 0 0 / 0.06);
+  --shadow-md: 0 4px 8px -2px oklch(0 0 0 / 0.06), 0 2px 4px -2px oklch(0 0 0 / 0.05);
+  --shadow-lg: 0 12px 20px -6px oklch(0 0 0 / 0.08), 0 4px 6px -4px oklch(0 0 0 / 0.05);
+  --shadow-xl: 0 24px 36px -10px oklch(0 0 0 / 0.1), 0 8px 12px -6px oklch(0 0 0 / 0.06);
 }
 
 :root {
+  /* Base font stack — `--font-geist-sans`/`--font-geist-mono` are set
+     via next/font's `variable` option on the <html> element in
+     app/layout.tsx; this is the token every `font-sans`/`font-mono`
+     Tailwind utility actually resolves to. (Fixed from the original
+     scaffold, which referenced `--font-sans` without ever defining
+     it — every `font-sans` utility was silently falling back to the
+     browser default, not Geist.) */
+  --font-sans:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.15 0.018 260);
+
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.15 0.018 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --popover-foreground: oklch(0.15 0.018 260);
+
+  /* Brand — the one saturated hue in the whole palette. */
+  --primary: oklch(0.531 0.196 267);
+  --primary-foreground: oklch(0.985 0.004 260);
+
+  --secondary: oklch(0.965 0.006 260);
+  --secondary-foreground: oklch(0.208 0.018 260);
+
+  --muted: oklch(0.965 0.006 260);
+  --muted-foreground: oklch(0.482 0.015 260);
+
+  --accent: oklch(0.941 0.021 267);
+  --accent-foreground: oklch(0.315 0.09 267);
+
+  --destructive: oklch(0.577 0.222 27);
+  --destructive-foreground: oklch(0.985 0.004 260);
+
+  /* Extra semantic tokens beyond shadcn's default set — status
+     badges (orders, payments, kitchen tickets) need affirmative and
+     cautionary colors, not just neutral/destructive. `--success`/
+     `--warning` are tuned to the same lightness tier as
+     `--destructive` (~0.58-0.6) specifically so `text-success`/
+     `text-warning` are directly readable on their own as small text
+     against the page background (the "soft badge" pattern — see
+     badge.tsx) — `-foreground` is reserved for text on a *solid*
+     fill of the paired color (e.g. a filled Button), a different
+     contrast problem with a different answer, not a synonym. Amber
+     in particular has to sit noticeably darker than it looks
+     "natural" at to clear 4.5:1 against white as text. */
+  --success: oklch(0.6 0.146 155);
+  --success-foreground: oklch(0.985 0.01 155);
+  --warning: oklch(0.6 0.16 60);
+  --warning-foreground: oklch(0.16 0.03 60);
+
+  --border: oklch(0.91 0.007 260);
+  --input: oklch(0.91 0.007 260);
+  --ring: oklch(0.531 0.196 267);
+
+  /* Chart palette — one hue family sharing the brand's chroma/lightness
+     rhythm so a multi-series chart reads as one designed system, not
+     five unrelated colors. Ordered by intended series priority
+     (chart-1 = the "hero" series, e.g. revenue). */
+  --chart-1: oklch(0.58 0.196 267);
+  --chart-2: oklch(0.696 0.14 190);
+  --chart-3: oklch(0.723 0.16 75);
+  --chart-4: oklch(0.635 0.196 25);
+  --chart-5: oklch(0.6 0.146 155);
+
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Sidebar gets its own token set (not just reused background/card)
+     so it can sit visually "behind" the main canvas — a hair darker
+     in light mode, a hair darker still in dark mode — the same
+     depth cue Linear/Notion's sidebars use. */
+  --sidebar: oklch(0.978 0.004 260);
+  --sidebar-foreground: oklch(0.15 0.018 260);
+  --sidebar-primary: oklch(0.531 0.196 267);
+  --sidebar-primary-foreground: oklch(0.985 0.004 260);
+  --sidebar-accent: oklch(0.941 0.021 267);
+  --sidebar-accent-foreground: oklch(0.4 0.15 267);
+  --sidebar-border: oklch(0.91 0.007 260);
+  --sidebar-ring: oklch(0.531 0.196 267);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --background: oklch(0.161 0.012 260);
+  --foreground: oklch(0.955 0.006 260);
+
+  --card: oklch(0.196 0.013 260);
+  --card-foreground: oklch(0.955 0.006 260);
+  --popover: oklch(0.208 0.013 260);
+  --popover-foreground: oklch(0.955 0.006 260);
+
+  --primary: oklch(0.685 0.17 267);
+  --primary-foreground: oklch(0.15 0.03 267);
+
+  --secondary: oklch(0.255 0.014 260);
+  --secondary-foreground: oklch(0.92 0.006 260);
+
+  --muted: oklch(0.255 0.014 260);
+  --muted-foreground: oklch(0.646 0.014 260);
+
+  --accent: oklch(0.28 0.045 267);
+  --accent-foreground: oklch(0.86 0.07 267);
+
+  --destructive: oklch(0.66 0.205 27);
+  --destructive-foreground: oklch(0.985 0.004 260);
+
+  --success: oklch(0.69 0.15 155);
+  --success-foreground: oklch(0.14 0.03 155);
+  --warning: oklch(0.72 0.15 65);
+  --warning-foreground: oklch(0.16 0.03 65);
+
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.685 0.17 267);
+
+  --chart-1: oklch(0.685 0.17 267);
+  --chart-2: oklch(0.74 0.13 190);
+  --chart-3: oklch(0.77 0.15 75);
+  --chart-4: oklch(0.7 0.18 25);
+  --chart-5: oklch(0.69 0.15 155);
+
+  --sidebar: oklch(0.135 0.012 260);
+  --sidebar-foreground: oklch(0.92 0.006 260);
+  --sidebar-primary: oklch(0.685 0.17 267);
+  --sidebar-primary-foreground: oklch(0.15 0.03 267);
+  --sidebar-accent: oklch(0.255 0.05 267);
+  --sidebar-accent-foreground: oklch(0.86 0.08 267);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.685 0.17 267);
+
+  /* Dark surfaces don't benefit from a black shadow — swap the whole
+     scale for a faint, cool-tinted glow instead of the light-mode
+     wash defined in @theme inline above. */
+  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.2);
+  --shadow-sm: 0 1px 3px 0 oklch(0 0 0 / 0.3), 0 1px 2px -1px oklch(0 0 0 / 0.3);
+  --shadow-md: 0 4px 8px -2px oklch(0 0 0 / 0.32), 0 2px 4px -2px oklch(0 0 0 / 0.28);
+  --shadow-lg: 0 12px 20px -6px oklch(0 0 0 / 0.4), 0 4px 6px -4px oklch(0 0 0 / 0.3);
+  --shadow-xl: 0 24px 36px -10px oklch(0 0 0 / 0.5), 0 8px 12px -6px oklch(0 0 0 / 0.35);
 }
 
 @layer base {
@@ -126,5 +245,27 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Motion Guidelines: respected globally, not per-component — a user
+     who has asked their OS for reduced motion gets it everywhere,
+     with zero per-component opt-out to forget. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Tabular figures for anything that's a metric that updates over
+     time (stat cards, tables of money/counts) — digits must not
+     reflow the layout as they change width. */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 }
