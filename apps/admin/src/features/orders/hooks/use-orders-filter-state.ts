@@ -16,8 +16,16 @@ function endOfDay(date: Date): Date {
   return d;
 }
 
-/** Mirrors apps/backend/src/modules/analytics/analytics.constants.ts's resolveDateRange exactly, for the 3 presets that have a fixed meaning — `custom` uses whatever the two date pickers hold instead. */
-function resolvePresetRange(preset: DatePreset, custom: { dateFrom?: string; dateTo?: string }) {
+/**
+ * Mirrors apps/backend/src/modules/analytics/analytics.constants.ts's
+ * resolveDateRange exactly, for the 3 presets that have a fixed
+ * meaning — `custom` uses whatever the two date pickers hold instead.
+ * Exported for the Payments Management phase's filter state, which
+ * needs the exact same preset-to-range resolution over the same
+ * `GET /kitchen/orders` `dateFrom`/`dateTo` params — reused, not
+ * reimplemented.
+ */
+export function resolvePresetRange(preset: DatePreset, custom: { dateFrom?: string; dateTo?: string }) {
   const now = new Date();
   switch (preset) {
     case 'today':
@@ -45,8 +53,8 @@ function resolvePresetRange(preset: DatePreset, custom: { dateFrom?: string; dat
   }
 }
 
-/** True if the search text is exactly a 6-digit pickup code — the two real backend search fields are `orderNumber` and `pickupToken`, and this is the only reliable way to tell which one the admin means. */
-function isPickupToken(value: string): boolean {
+/** True if the search text is exactly a 6-digit pickup code — the two real backend search fields are `orderNumber` and `pickupToken`, and this is the only reliable way to tell which one the admin means. Exported — reused as-is by the Payments Management phase's filter state. */
+export function isPickupToken(value: string): boolean {
   return /^\d{6}$/.test(value.trim());
 }
 

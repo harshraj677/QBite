@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchData, type QueryValue } from '@/lib/api/client';
+import { apiFetch, apiFetchData, type ApiResult, type QueryValue } from '@/lib/api/client';
 import type {
   OrderDto,
   OrdersQueryParams,
@@ -14,27 +14,54 @@ import type {
  * Center" note on why every filter here is a real query param, not a
  * client-side post-filter). Returns `{data, meta}` — the table needs
  * `meta.total` for real pagination, so this uses `apiFetch`, not
- * `apiFetchData`. No line items on the list rows (the list endpoint
- * deliberately omits them — see `getOrderDetail` below for those).
+ * `apiFetchData`. No line items on the list rows by default — only
+ * when `includeItems: true` is passed (the Kitchen Operations Center's
+ * `getKitchenOrders`, see features/kitchen/api.ts), which the two
+ * overloads below reflect at the type level, mirroring the real,
+ * conditional response shape `orders.service.ts` produces.
  */
+export function getOrders(
+  params: OrdersQueryParams & { includeItems: true },
+): Promise<ApiResult<OrderWithItemsDto[]>>;
+export function getOrders(params: OrdersQueryParams): Promise<ApiResult<OrderDto[]>>;
 export function getOrders(params: OrdersQueryParams) {
-  return apiFetch<OrderDto[]>('/kitchen/orders', {
+  return apiFetch<(OrderDto | OrderWithItemsDto)[]>('/kitchen/orders', {
     query: params as unknown as Record<string, QueryValue>,
   });
 }
 
-export function getOrderDetail(id: string): Promise<OrderWithItemsDto> {
-  return apiFetchData<OrderWithItemsDto>(`/orders/${id}`);
+/**
+ * Every single-resource `sendSuccess(res, { order })`-style endpoint
+ * in this backend wraps its payload in a named key — never the bare
+ * resource — unlike `sendPaginated`'s bare-array `data` (see
+ * `getOrders` above) or an analytics endpoint's bare aggregate. Each
+ * function below unwraps its own key explicitly instead of typing the
+ * wrapper away with `apiFetchData<Resource>(...)`, which was a real
+ * bug (found once Atlas connectivity came back and made a live
+ * envelope-shape check possible for the first time this project):
+ * every field read off the "resource" was actually reading it off the
+ * `{ order: {...} }` wrapper object, so `order.orderNumber` etc. were
+ * silently `undefined` everywhere this was consumed (the Operations
+ * Center drawer, the Kitchen board's per-card student name, the
+ * Dashboard's order quick-look sheet). Confirmed against the
+ * already-passing backend integration tests' own response-shape
+ * assertions (`res.body.data.order`/`.payment`/`.user`), not guessed.
+ */
+export async function getOrderDetail(id: string): Promise<OrderWithItemsDto> {
+  const { order } = await apiFetchData<{ order: OrderWithItemsDto }>(`/orders/${id}`);
+  return order;
 }
 
 /** `GET /payments/order/:orderId` — the SUCCESS payment if one exists, otherwise the most recent attempt. 404 when the order has no payment attempts yet (e.g. a still-`pending` cash order) — callers treat that as "no payment," not an error. */
-export function getOrderPayment(orderId: string): Promise<PaymentDto> {
-  return apiFetchData<PaymentDto>(`/payments/order/${orderId}`);
+export async function getOrderPayment(orderId: string): Promise<PaymentDto> {
+  const { payment } = await apiFetchData<{ payment: PaymentDto }>(`/payments/order/${orderId}`);
+  return payment;
 }
 
 /** `GET /users/:id` — added in this phase specifically for the drawer's Student section (see users.routes.ts's doc comment). */
-export function getStudent(studentId: string): Promise<StudentDto> {
-  return apiFetchData<StudentDto>(`/users/${studentId}`);
+export async function getStudent(studentId: string): Promise<StudentDto> {
+  const { user } = await apiFetchData<{ user: StudentDto }>(`/users/${studentId}`);
+  return user;
 }
 
 const STATUS_ENDPOINT: Record<string, string> = {
@@ -44,11 +71,15 @@ const STATUS_ENDPOINT: Record<string, string> = {
   completed: 'complete',
 };
 
-/** The kitchen's 4 fixed-target transitions — same endpoints the (not-yet-built) Kitchen page will use. No request body; the target status is implied by which endpoint is called. */
-export function advanceOrderStatus(orderId: string, toStatus: OrderStatus): Promise<OrderDto> {
+/** The kitchen's 4 fixed-target transitions — same endpoints the Kitchen page uses. No request body; the target status is implied by which endpoint is called. */
+export async function advanceOrderStatus(orderId: string, toStatus: OrderStatus): Promise<OrderDto> {
   const segment = STATUS_ENDPOINT[toStatus];
   if (!segment) {
     throw new Error(`"${toStatus}" is not a valid forward-transition target.`);
   }
-  return apiFetchData<OrderDto>(`/kitchen/orders/${orderId}/${segment}`, { method: 'PATCH' });
+  const { order } = await apiFetchData<{ order: OrderDto }>(
+    `/kitchen/orders/${orderId}/${segment}`,
+    { method: 'PATCH' },
+  );
+  return order;
 }

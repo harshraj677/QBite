@@ -25,3 +25,18 @@ export function formatHourLabel(hour: number): string {
   const displayHour = hour % 12 === 0 ? 12 : hour % 12;
   return `${displayHour} ${period}`;
 }
+
+/**
+ * First letter of the first word + first letter of the last word —
+ * the standard avatar-initials convention (correct for 3+-word names,
+ * unlike "first two words," which would take a middle name instead of
+ * a surname). Consolidated here at RC1 — this exact logic was
+ * previously duplicated across `UserMenu`, the Profile page,
+ * `UsersTable`, and `UserDetailDrawer`.
+ */
+export function getInitials(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  const first = parts[0]?.[0] ?? '';
+  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '';
+  return (first + last).toUpperCase();
+}

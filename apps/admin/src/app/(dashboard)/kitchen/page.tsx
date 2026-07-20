@@ -1,15 +1,8 @@
-import { ChefHat } from 'lucide-react';
-import { ComingSoonPage } from '@/components/shared/coming-soon';
+import { KitchenOperationsPage } from '@/features/kitchen/components/kitchen-operations-page';
 
+export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Kitchen' };
 
 export default function KitchenPage() {
-  return (
-    <ComingSoonPage
-      title="Kitchen"
-      pageDescription="Live kitchen queue and order status board."
-      icon={ChefHat}
-      emptyStateDescription="A real-time kitchen ticket queue — accept, start preparing, mark ready, complete — is coming in the next phase."
-    />
-  );
+  return <KitchenOperationsPage />;
 }

@@ -13,20 +13,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/providers/auth-provider';
-
-function initials(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/);
-  const first = parts[0]?.[0] ?? '';
-  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '';
-  return (first + last).toUpperCase();
-}
-
-const ROLE_LABELS: Record<string, string> = {
-  student: 'Student',
-  kitchen_staff: 'Kitchen Staff',
-  admin: 'Admin',
-  super_admin: 'Super Admin',
-};
+import { getInitials } from '@/lib/format';
+import { USER_ROLE_LABELS } from '@/lib/user-role';
 
 export function UserMenu() {
   const { user, logout } = useAuth();
@@ -39,7 +27,7 @@ export function UserMenu() {
         render={
           <Button variant="ghost" className="h-9 gap-2 px-1.5">
             <Avatar className="size-6.5">
-              <AvatarFallback className="text-[11px]">{initials(user.fullName)}</AvatarFallback>
+              <AvatarFallback className="text-[11px]">{getInitials(user.fullName)}</AvatarFallback>
             </Avatar>
             <span className="hidden max-w-32 truncate text-sm font-medium sm:inline">
               {user.fullName}
@@ -52,7 +40,7 @@ export function UserMenu() {
           <span className="truncate text-sm font-medium text-foreground">{user.fullName}</span>
           <span className="truncate text-xs text-muted-foreground">{user.collegeEmail}</span>
           <span className="mt-1 w-fit rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-            {ROLE_LABELS[user.role] ?? user.role}
+            {USER_ROLE_LABELS[user.role]}
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

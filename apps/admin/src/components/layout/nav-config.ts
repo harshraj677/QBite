@@ -1,5 +1,4 @@
 import {
-  BarChart3,
   Bell,
   ChefHat,
   CreditCard,
@@ -40,20 +39,20 @@ const ADMIN_ONLY = ['admin', 'super_admin'] as const;
  * concerns on the backend) — a sidebar should read the way an admin
  * thinks about their day, not the way the API is partitioned.
  *
- * Every route below exists (see app/(dashboard)/) — most render a
- * polished "coming soon" state for this phase (see EmptyState), not a
- * 404, because the backend endpoints they'd need don't exist yet
- * either (there is no user-listing or audit-log-listing HTTP endpoint
- * in the backend today — see PHASE_1_REPORT.md). Only Dashboard is
- * wired to real data in Phase 1.
+ * Every route below exists (see app/(dashboard)/) and is wired to real
+ * data as of RC1, with two exceptions still on a polished "coming
+ * soon" state (see EmptyState) rather than a 404: Categories
+ * (`/menu/categories` — the Menu Management phase built Menu Items
+ * only, per its own scope) and Audit Logs (`/audit-logs` — the audit
+ * module has no HTTP read surface at all, by design; see
+ * ARCHITECTURE.md's `modules/audit` note). `/analytics` was removed
+ * from here at RC1 — see app/(dashboard)/analytics/page.tsx's redirect
+ * to `/reports`, which is the one real page for both.
  */
 export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Overview',
-    items: [
-      { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-      { title: 'Analytics', href: '/analytics', icon: BarChart3, roles: ADMIN_ONLY },
-    ],
+    items: [{ title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }],
   },
   {
     title: 'Operations',

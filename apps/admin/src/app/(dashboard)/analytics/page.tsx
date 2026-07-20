@@ -1,15 +1,16 @@
-import { BarChart3 } from 'lucide-react';
-import { ComingSoonPage } from '@/components/shared/coming-soon';
+import { redirect } from 'next/navigation';
 
-export const metadata = { title: 'Analytics' };
-
+/**
+ * `/analytics` and `/reports` were two separate Phase-1 nav entries
+ * with near-identical placeholder copy ("revenue, order, menu,
+ * canteen, and customer analytics" for both) — the Reports & Analytics
+ * Center phase built the real page at `/reports` and left this one as
+ * an untouched stub, flagged as a naming overlap to resolve later (see
+ * ARCHITECTURE.md's Reports & Analytics Center note). RC1 resolves it:
+ * `/analytics` is removed from the sidebar/command palette (see
+ * nav-config.ts) and now redirects here, so no old bookmark or direct
+ * link 404s.
+ */
 export default function AnalyticsPage() {
-  return (
-    <ComingSoonPage
-      title="Analytics"
-      pageDescription="Revenue, order, menu, canteen, and customer analytics."
-      icon={BarChart3}
-      emptyStateDescription="Deep-dive charts for revenue trends, order patterns, top-selling items, and customer behavior are coming next — the analytics API behind them is already live."
-    />
-  );
+  redirect('/reports');
 }

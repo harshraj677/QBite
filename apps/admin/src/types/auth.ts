@@ -14,6 +14,17 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const ADMIN_PANEL_ROLES = ['kitchen_staff', 'admin', 'super_admin'] as const satisfies readonly UserRole[];
 export type AdminPanelRole = (typeof ADMIN_PANEL_ROLES)[number];
 
+/**
+ * Mirrors the backend's `PublicUserDto` exactly — every field it
+ * returns, on every endpoint that returns a user shape (`/auth/me`,
+ * `/auth/login`, `/auth/register`, `/users/:id`, `/users`). `isActive`/
+ * `lastLoginAt` were added for the Users Management phase (the backend
+ * added them to `PublicUserDto` itself — see ARCHITECTURE.md's Users
+ * Management note) — purely additive, no existing field changed. This
+ * is also the canonical "user" type reused as-is by
+ * `features/orders/types.ts`'s `StudentDto` and `features/users/types.ts`'s
+ * `UserDto`, rather than each declaring its own parallel shape.
+ */
 export interface AuthUser {
   id: string;
   usn?: string;
@@ -22,5 +33,7 @@ export interface AuthUser {
   phoneNumber: string;
   role: UserRole;
   isEmailVerified: boolean;
+  isActive: boolean;
+  lastLoginAt?: string;
   createdAt: string;
 }

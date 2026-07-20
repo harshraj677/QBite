@@ -1,15 +1,7 @@
-import { FileBarChart } from 'lucide-react';
-import { ComingSoonPage } from '@/components/shared/coming-soon';
+import { ReportsPage } from '@/features/reports/components/reports-page';
 
 export const metadata = { title: 'Reports' };
 
-export default function ReportsPage() {
-  return (
-    <ComingSoonPage
-      title="Reports"
-      pageDescription="Exportable operational reports."
-      icon={FileBarChart}
-      emptyStateDescription="Downloadable revenue, order, and staff performance reports are coming in a future phase."
-    />
-  );
+export default function Page() {
+  return <ReportsPage />;
 }

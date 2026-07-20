@@ -1,15 +1,13 @@
-import { Users } from 'lucide-react';
-import { ComingSoonPage } from '@/components/shared/coming-soon';
+import { UsersDirectoryPage } from '@/features/users/components/users-directory-page';
 
 export const metadata = { title: 'Students' };
 
 export default function StudentsPage() {
   return (
-    <ComingSoonPage
+    <UsersDirectoryPage
       title="Students"
-      pageDescription="Every registered student account."
-      icon={Users}
-      emptyStateDescription="A searchable student directory with order history and account status is coming in a future phase."
+      description="Every registered student account — searchable, filterable, real-time."
+      lockedRole="student"
     />
   );
 }

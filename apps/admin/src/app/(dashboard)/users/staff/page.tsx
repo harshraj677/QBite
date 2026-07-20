@@ -1,15 +1,14 @@
-import { UserCog } from 'lucide-react';
-import { ComingSoonPage } from '@/components/shared/coming-soon';
+import { UsersDirectoryPage } from '@/features/users/components/users-directory-page';
+import { STAFF_ROLES } from '@/lib/user-role';
 
 export const metadata = { title: 'Staff' };
 
 export default function StaffPage() {
   return (
-    <ComingSoonPage
+    <UsersDirectoryPage
       title="Staff"
-      pageDescription="Kitchen staff, admins, and super admins."
-      icon={UserCog}
-      emptyStateDescription="Staff account management — roles, canteen assignment, activation — is coming in a future phase."
+      description="Kitchen staff, admins, and super admins — roles and account status."
+      roleOptions={STAFF_ROLES}
     />
   );
 }

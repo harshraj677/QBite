@@ -69,7 +69,17 @@ export function getRecentOrders(params: { limit?: number } = {}): Promise<OrderD
   });
 }
 
-/** `GET /orders/:id` — powers the Recent Orders table's "View details" quick-look sheet. Kitchen staff/admin/super_admin may view any order (see orders.service.ts's `getOrderById`). */
-export function getOrderDetail(id: string): Promise<OrderWithItemsDto> {
-  return apiFetchData<OrderWithItemsDto>(`/orders/${id}`);
+/**
+ * `GET /orders/:id` — powers the Recent Orders table's "View details"
+ * quick-look sheet. Kitchen staff/admin/super_admin may view any order
+ * (see orders.service.ts's `getOrderById`). Unwraps the response's
+ * `{ order: {...} }` envelope explicitly — `sendSuccess(res, { order
+ * })` on the backend never returns the bare resource, and typing it
+ * away with `apiFetchData<OrderWithItemsDto>(...)` was a real bug (see
+ * features/orders/api.ts's `getOrderDetail` doc comment for the full
+ * story of how this was found and confirmed).
+ */
+export async function getOrderDetail(id: string): Promise<OrderWithItemsDto> {
+  const { order } = await apiFetchData<{ order: OrderWithItemsDto }>(`/orders/${id}`);
+  return order;
 }
