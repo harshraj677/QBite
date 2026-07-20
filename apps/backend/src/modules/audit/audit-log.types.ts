@@ -60,6 +60,15 @@ export const AUDIT_ACTIONS = [
   'payment.success',
   'payment.failed',
   'payment.refunded',
+  // user — Admin Panel's Users Management phase. Role changes are one
+  // action regardless of direction (fromRole/toRole live in metadata,
+  // same as order.status transitions used to before they were split —
+  // a role change isn't a small enum of fixed targets the way an order
+  // status transition is, so one action + metadata is the right shape
+  // here, not four/twelve separately-named actions).
+  'user.role_updated',
+  'user.activated',
+  'user.deactivated',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

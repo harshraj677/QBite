@@ -22,7 +22,7 @@ const KITCHEN_ROLES = ['kitchen_staff', 'admin', 'super_admin'] as const;
  * /api/v1/kitchen/orders:
  *   get:
  *     summary: Kitchen dashboard — list orders across every canteen
- *     description: kitchen_staff/admin/super_admin only. Unscoped by canteen (no kitchen_staff-to-canteen assignment exists yet — see ARCHITECTURE.md §3.1). `status=pending` is the "incoming orders" view; `preparing`/`ready`/`completed` map directly to their own dashboard views. `paymentStatus`/`studentId`/`canteenId`/`dateFrom`/`dateTo`/`minAmount`/`maxAmount` were added for the Admin Panel's Operations Center — every one is a real, server-side filter (not a client-side post-filter over one page), so any combination returns the true matching set across every canteen.
+ *     description: kitchen_staff/admin/super_admin only. Unscoped by canteen (no kitchen_staff-to-canteen assignment exists yet — see ARCHITECTURE.md §3.1). `status=pending` is the "incoming orders" view; `preparing`/`ready`/`completed` map directly to their own dashboard views. `paymentStatus`/`studentId`/`canteenId`/`dateFrom`/`dateTo`/`minAmount`/`maxAmount` were added for the Admin Panel's Operations Center — every one is a real, server-side filter (not a client-side post-filter over one page), so any combination returns the true matching set across every canteen. `includeItems` was added for the Kitchen Operations Center — a Kitchen Display System's board shows each order's items directly on its card.
  *     tags: [Kitchen]
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -38,6 +38,10 @@ const KITCHEN_ROLES = ['kitchen_staff', 'admin', 'super_admin'] as const;
  *       - in: query
  *         name: paymentStatus
  *         schema: { type: string, enum: [pending, paid, failed, refunded] }
+ *       - in: query
+ *         name: paymentMethod
+ *         description: Added for the Payments Management phase.
+ *         schema: { type: string, enum: [cash, online] }
  *       - in: query
  *         name: orderNumber
  *         schema: { type: string }
@@ -65,12 +69,16 @@ const KITCHEN_ROLES = ['kitchen_staff', 'admin', 'super_admin'] as const;
  *         description: Inclusive upper bound on totalAmount, paise.
  *         schema: { type: integer }
  *       - in: query
+ *         name: includeItems
+ *         description: When "true", each order in the response carries its line items (see the Payment/Order schemas) — one batched query for the whole page, not one per order.
+ *         schema: { type: string, enum: [true, false], default: "false" }
+ *       - in: query
  *         name: sortOrder
  *         description: "asc = oldest first, desc = newest first"
  *         schema: { type: string, enum: [asc, desc], default: desc }
  *     responses:
  *       200:
- *         description: Paginated order list (without items — GET /kitchen/orders/{id} for line-item detail).
+ *         description: Paginated order list. Items are omitted unless `includeItems=true` — see GET /kitchen/orders/{id} for single-order line-item detail otherwise.
  *         content:
  *           application/json:
  *             schema:

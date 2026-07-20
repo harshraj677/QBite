@@ -4,6 +4,11 @@ import { CanteenModel } from './canteen.model';
 import type { CanteenSortableField } from './canteens.constants';
 import type { ICanteen } from './canteen.types';
 
+/** Escapes regex metacharacters in free-text search input — same helper/reasoning as UsersRepository.search's. */
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export interface CreateCanteenInput {
   name: string;
   nameKey: string;
@@ -21,6 +26,8 @@ export interface ListCanteensOptions {
   page: number;
   limit: number;
   isOpen?: boolean;
+  /** Matched case-insensitively against name and location — added for the Canteens Management phase's Directory search. */
+  search?: string;
   sortBy: CanteenSortableField;
   sortOrder: 'asc' | 'desc';
 }
@@ -57,6 +64,10 @@ export class CanteensRepository {
     const filter: Record<string, unknown> = { isDeleted: false };
     if (options.isOpen !== undefined) {
       filter.isOpen = options.isOpen;
+    }
+    if (options.search) {
+      const pattern = new RegExp(escapeRegex(options.search), 'i');
+      filter.$or = [{ name: pattern }, { location: pattern }];
     }
 
     const sort: Record<string, 1 | -1> = { [options.sortBy]: options.sortOrder === 'asc' ? 1 : -1 };

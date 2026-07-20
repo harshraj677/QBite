@@ -145,6 +145,46 @@ describe('CanteensRepository.findAll', () => {
 
     expect(remaining.total).toBe(2);
   });
+
+  it('searches case-insensitively by name', async () => {
+    const result = await repository.findAll({
+      page: 1,
+      limit: 10,
+      search: 'beta',
+      sortBy: 'name',
+      sortOrder: 'asc',
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.canteens[0].name).toBe('Beta Canteen');
+  });
+
+  it('searches by location', async () => {
+    const all = await repository.findAll({ page: 1, limit: 10, sortBy: 'name', sortOrder: 'asc' });
+    await repository.update(all.canteens[0]._id, { location: 'Unique Wing, 2nd Floor' });
+
+    const result = await repository.findAll({
+      page: 1,
+      limit: 10,
+      search: 'unique wing',
+      sortBy: 'name',
+      sortOrder: 'asc',
+    });
+
+    expect(result.total).toBe(1);
+  });
+
+  it('does not throw on regex-special characters in search input', async () => {
+    await expect(
+      repository.findAll({
+        page: 1,
+        limit: 10,
+        search: '(alpha',
+        sortBy: 'name',
+        sortOrder: 'asc',
+      }),
+    ).resolves.toMatchObject({ total: 0 });
+  });
 });
 
 describe('CanteensRepository.update', () => {

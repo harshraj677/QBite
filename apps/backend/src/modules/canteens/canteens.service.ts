@@ -77,6 +77,7 @@ export class CanteensService {
       page: query.page,
       limit: query.limit,
       isOpen: query.isOpen,
+      search: query.search,
       sortBy: query.sortBy,
       sortOrder: query.sortOrder,
     };

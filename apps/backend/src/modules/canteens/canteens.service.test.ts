@@ -188,6 +188,23 @@ describe('CanteensService.listCanteens', () => {
     expect(result.total).toBe(1);
     expect(result.canteens[0].name).toBe('Main Canteen');
   });
+
+  it('passes search through to the repository untouched', async () => {
+    const repo = makeMockRepository();
+    repo.findAll.mockResolvedValue({ canteens: [], total: 0 });
+    const service = new CanteensService(repo);
+
+    await service.listCanteens({
+      page: 1,
+      limit: 20,
+      isOpen: undefined,
+      search: 'beta',
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    });
+
+    expect(repo.findAll).toHaveBeenCalledWith(expect.objectContaining({ search: 'beta' }));
+  });
 });
 
 describe('CanteensService.updateCanteen', () => {

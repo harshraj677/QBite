@@ -89,6 +89,31 @@ describe('OrderItemsRepository.createMany / findByOrderId', () => {
   });
 });
 
+// Regression coverage for the Kitchen Operations Center phase.
+describe('OrderItemsRepository.findByOrderIds', () => {
+  it('returns items across multiple orders in one query', async () => {
+    const orderA = new Types.ObjectId();
+    const orderB = new Types.ObjectId();
+    const untouched = new Types.ObjectId();
+    await repository.createMany([
+      makeInput({ orderId: orderA }),
+      makeInput({ orderId: orderB }),
+      makeInput({ orderId: untouched }),
+    ]);
+
+    const found = await repository.findByOrderIds([orderA, orderB]);
+
+    expect(found).toHaveLength(2);
+    expect(found.map((i) => i.orderId.toString()).sort()).toEqual(
+      [orderA.toString(), orderB.toString()].sort(),
+    );
+  });
+
+  it('returns an empty array when given no ids', async () => {
+    expect(await repository.findByOrderIds([])).toEqual([]);
+  });
+});
+
 // Regression coverage for the Analytics phase's aggregation methods.
 describe('OrderItemsRepository analytics aggregations', () => {
   const from = new Date(Date.now() - 60000);

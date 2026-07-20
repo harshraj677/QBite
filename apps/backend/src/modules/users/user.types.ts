@@ -33,6 +33,14 @@ export interface IUser extends Document {
  * boundary as. `passwordHash`, `failedLoginAttempts`, `lockedUntil`
  * are deliberately excluded — never exposed to a client regardless of
  * which endpoint is asking.
+ *
+ * `isActive`/`lastLoginAt` were added for the Admin Panel's Users
+ * Management phase (real, already-existing `IUser` fields — `isActive`
+ * already gates login in `auth.middleware.ts`; `lastLoginAt` is
+ * already stamped by `UsersRepository.updateLastLoginAt`, just never
+ * previously exposed). Purely additive: every existing consumer of
+ * this DTO (`/auth/me`, `/auth/login`, `/auth/register`, `/users/:id`)
+ * now also returns these two fields, with no field removed or renamed.
  */
 export interface PublicUserDto {
   id: string;
@@ -42,6 +50,8 @@ export interface PublicUserDto {
   phoneNumber: string;
   role: UserRole;
   isEmailVerified: boolean;
+  isActive: boolean;
+  lastLoginAt?: Date;
   createdAt: Date;
 }
 
@@ -54,6 +64,8 @@ export function toPublicUserDto(user: IUser): PublicUserDto {
     phoneNumber: user.phoneNumber,
     role: user.role,
     isEmailVerified: user.isEmailVerified,
+    isActive: user.isActive,
+    lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
   };
 }

@@ -107,6 +107,10 @@ canteensRouter.post(
  *         name: isOpen
  *         schema: { type: boolean }
  *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: Matched case-insensitively against name and location. Added for the Canteens Management phase.
+ *       - in: query
  *         name: sortBy
  *         schema: { type: string, enum: [name, createdAt], default: createdAt }
  *       - in: query

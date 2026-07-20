@@ -1,6 +1,7 @@
 import type { Types } from 'mongoose';
 
 import { UserModel } from './user.model';
+import type { UserSortableField } from './users.constants';
 import type { IUser, UserRole } from './user.types';
 import { USER_ROLES } from './user.types';
 
@@ -11,6 +12,28 @@ export interface CreateUserInput {
   phoneNumber: string;
   passwordHash: string;
   role?: UserRole;
+}
+
+export interface SearchUsersOptions {
+  /** Matched case-insensitively against fullName, collegeEmail, usn, and phoneNumber (an OR across all four — an admin searching "9876" or "arjun" shouldn't need to know which field it lives in). */
+  search?: string;
+  role?: UserRole;
+  isEmailVerified?: boolean;
+  isActive?: boolean;
+  page: number;
+  limit: number;
+  sortBy: UserSortableField;
+  sortOrder: 'asc' | 'desc';
+}
+
+export interface SearchUsersResult {
+  users: IUser[];
+  total: number;
+}
+
+/** Escapes regex metacharacters in free-text search input before it reaches `$regex` — an unescaped `(`/`*`/etc. in a search box would otherwise throw at query-compile time instead of just matching literally, as a user typing punctuation would expect. */
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -131,5 +154,68 @@ export class UsersRepository {
   /** Batch fetch for enriching an id list (e.g. top customers) with names/emails in one round trip instead of N — see ARCHITECTURE.md's `modules/analytics` note on avoiding N+1 queries. */
   findByIds(ids: (string | Types.ObjectId)[]): Promise<IUser[]> {
     return UserModel.find({ _id: { $in: ids } }).exec();
+  }
+
+  // ---------------------------------------------------------------
+  // Users Management phase (Admin Panel) — the first real list/search
+  // surface over `users`; everything before this point only ever
+  // fetched one user (by id/email/usn/phone) or an aggregate count.
+  // ---------------------------------------------------------------
+
+  async search(options: SearchUsersOptions): Promise<SearchUsersResult> {
+    const filter: Record<string, unknown> = {};
+    if (options.role) filter.role = options.role;
+    if (options.isEmailVerified !== undefined) filter.isEmailVerified = options.isEmailVerified;
+    if (options.isActive !== undefined) filter.isActive = options.isActive;
+    if (options.search) {
+      const pattern = new RegExp(escapeRegex(options.search), 'i');
+      filter.$or = [
+        { fullName: pattern },
+        { collegeEmail: pattern },
+        { usn: pattern },
+        { phoneNumber: pattern },
+      ];
+    }
+
+    const sort: Record<string, 1 | -1> = { [options.sortBy]: options.sortOrder === 'asc' ? 1 : -1 };
+    const skip = (options.page - 1) * options.limit;
+
+    const [users, total] = await Promise.all([
+      UserModel.find(filter).sort(sort).skip(skip).limit(options.limit).exec(),
+      UserModel.countDocuments(filter).exec(),
+    ]);
+
+    return { users, total };
+  }
+
+  /** Plain, unconditional `$set` — trusts the caller (`UsersService.updateRole`) to have already run every legality check; same trust relationship `OrdersRepository.updatePaymentStatus` already documents with its own caller. */
+  updateRole(id: string | Types.ObjectId, role: UserRole): Promise<IUser | null> {
+    return UserModel.findOneAndUpdate(
+      { _id: id },
+      { $set: { role } },
+      { returnDocument: 'after' },
+    ).exec();
+  }
+
+  /** Same trust relationship as `updateRole` above — `UsersService.setActive` is the only legal caller. */
+  setActive(id: string | Types.ObjectId, isActive: boolean): Promise<IUser | null> {
+    return UserModel.findOneAndUpdate(
+      { _id: id },
+      { $set: { isActive } },
+      { returnDocument: 'after' },
+    ).exec();
+  }
+
+  /**
+   * Active-account count across the given roles, optionally excluding
+   * one id — the exact question `UsersService`'s "don't lock out every
+   * admin" and "don't remove the last super_admin" guards need to ask
+   * *before* applying a demotion/deactivation ("if I go through with
+   * this, will at least one qualifying account remain?").
+   */
+  countActive(roles: UserRole[], excludeId?: string | Types.ObjectId): Promise<number> {
+    const filter: Record<string, unknown> = { role: { $in: roles }, isActive: true };
+    if (excludeId !== undefined) filter._id = { $ne: excludeId };
+    return UserModel.countDocuments(filter).exec();
   }
 }

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { objectIdSchema } from '@validation/common.schemas';
-import { ORDER_STATUSES, PAYMENT_STATUSES } from '@modules/orders/order.types';
+import { ORDER_STATUSES, PAYMENT_METHODS, PAYMENT_STATUSES } from '@modules/orders/order.types';
 
 /**
  * Field-level *format* validation lives here (Zod, at the request
@@ -49,12 +49,18 @@ export type KitchenOrderIdParam = z.infer<typeof kitchenOrderIdParamSchema>;
 // mirroring exactly how this same endpoint already gained
 // `pickupToken` in the Kitchen Workflow phase. All optional — a
 // request with none of them behaves identically to before.
+//
+// `paymentMethod` was added later still, for the Payments Management
+// phase's Payments Table — same shape, same reasoning as
+// `paymentStatus`.
 export const listKitchenOrdersQuerySchema = z
   .object({
     page: z.coerce.number().int().positive().default(1),
     limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
     status: z.enum(ORDER_STATUSES).optional(),
     paymentStatus: z.enum(PAYMENT_STATUSES).optional(),
+    /** Added for the Payments Management phase, same shape/reasoning as `paymentStatus` above. */
+    paymentMethod: z.enum(PAYMENT_METHODS).optional(),
     orderNumber: z.string().trim().min(1).optional(),
     pickupToken: z
       .string()
@@ -68,6 +74,19 @@ export const listKitchenOrdersQuerySchema = z
     /** Inclusive bounds on totalAmount, paise (see docs/DATABASE_DESIGN.md §6). */
     minAmount: z.coerce.number().int().nonnegative().optional(),
     maxAmount: z.coerce.number().int().nonnegative().optional(),
+    /**
+     * Added for the Kitchen Operations Center phase — see
+     * OrdersService.searchOrders's doc comment on `includeItems`.
+     * Defaults `false`, matching every pre-existing request's
+     * behavior. Deliberately not `z.coerce.boolean()` — that coerces
+     * *any* non-empty string truthy, including the literal query
+     * string `"false"` (`Boolean("false") === true` in JS), which
+     * would make `?includeItems=false` silently turn items on.
+     */
+    includeItems: z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((value) => value === 'true'),
     sortOrder: z.enum(['asc', 'desc']).default('desc'),
   })
   .refine(

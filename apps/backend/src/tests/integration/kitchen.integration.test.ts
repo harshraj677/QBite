@@ -206,6 +206,27 @@ describe('GET /kitchen/orders', () => {
     expect(paidRes.body.meta.total).toBe(0);
   });
 
+  // Regression coverage for the Payments Management phase's new filter.
+  it('filters by paymentMethod', async () => {
+    const { Authorization: adminAuth } = await authHeaderFor('admin');
+    const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
+    const { Authorization: studentAuth } = await authHeaderFor('student');
+    const { canteenId, menuItemId } = await setupCanteenWithItem(adminAuth);
+    await placeOrder(studentAuth, canteenId, menuItemId);
+
+    const cashRes = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ paymentMethod: 'cash' })
+      .set('Authorization', staffAuth);
+    expect(cashRes.body.meta.total).toBe(1);
+
+    const onlineRes = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ paymentMethod: 'online' })
+      .set('Authorization', staffAuth);
+    expect(onlineRes.body.meta.total).toBe(0);
+  });
+
   it('filters by studentId, unscoped across every canteen', async () => {
     const { Authorization: adminAuth } = await authHeaderFor('admin');
     const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
@@ -297,6 +318,53 @@ describe('GET /kitchen/orders', () => {
       .set('Authorization', staffAuth);
 
     expect(res.status).toBe(400);
+  });
+
+  // Regression coverage for the Kitchen Operations Center phase.
+  it('omits items by default', async () => {
+    const { Authorization: adminAuth } = await authHeaderFor('admin');
+    const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
+    const { Authorization: studentAuth } = await authHeaderFor('student');
+    const { canteenId, menuItemId } = await setupCanteenWithItem(adminAuth);
+    await placeOrder(studentAuth, canteenId, menuItemId);
+
+    const res = await request(app).get('/api/v1/kitchen/orders').set('Authorization', staffAuth);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].items).toBeUndefined();
+  });
+
+  it('includes real items per order when includeItems=true', async () => {
+    const { Authorization: adminAuth } = await authHeaderFor('admin');
+    const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
+    const { Authorization: studentAuth } = await authHeaderFor('student');
+    const { canteenId, menuItemId } = await setupCanteenWithItem(adminAuth);
+    const order = await placeOrder(studentAuth, canteenId, menuItemId);
+
+    const res = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ includeItems: 'true' })
+      .set('Authorization', staffAuth);
+
+    expect(res.status).toBe(200);
+    const found = res.body.data.find((o: { id: string }) => o.id === order.body.data.order.id);
+    expect(found.items).toHaveLength(1);
+    expect(found.items[0].itemSnapshot.itemName).toBe('Veg Puff');
+  });
+
+  it('treats includeItems=false the same as omitted', async () => {
+    const { Authorization: adminAuth } = await authHeaderFor('admin');
+    const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
+    const { Authorization: studentAuth } = await authHeaderFor('student');
+    const { canteenId, menuItemId } = await setupCanteenWithItem(adminAuth);
+    await placeOrder(studentAuth, canteenId, menuItemId);
+
+    const res = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ includeItems: 'false' })
+      .set('Authorization', staffAuth);
+
+    expect(res.body.data[0].items).toBeUndefined();
   });
 
   it('sorts oldest first / newest first', async () => {

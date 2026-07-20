@@ -132,4 +132,13 @@ describe('listCanteensQuerySchema', () => {
   it('rejects a sortBy field outside the allow-list', () => {
     expect(listCanteensQuerySchema.safeParse({ sortBy: 'email' }).success).toBe(false);
   });
+
+  it('accepts an optional search string', () => {
+    expect(listCanteensQuerySchema.parse({ search: 'beta' }).search).toBe('beta');
+    expect(listCanteensQuerySchema.parse({}).search).toBeUndefined();
+  });
+
+  it('rejects an empty search string', () => {
+    expect(listCanteensQuerySchema.safeParse({ search: '' }).success).toBe(false);
+  });
 });

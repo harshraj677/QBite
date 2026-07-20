@@ -45,6 +45,7 @@ export class KitchenService {
     return this.ordersService.searchOrders({
       status: query.status,
       paymentStatus: query.paymentStatus,
+      paymentMethod: query.paymentMethod,
       orderNumber: query.orderNumber,
       pickupToken: query.pickupToken,
       studentId: query.studentId,
@@ -53,6 +54,7 @@ export class KitchenService {
       dateTo: query.dateTo,
       minAmount: query.minAmount,
       maxAmount: query.maxAmount,
+      includeItems: query.includeItems,
       page: query.page,
       limit: query.limit,
       sortBy: 'createdAt',

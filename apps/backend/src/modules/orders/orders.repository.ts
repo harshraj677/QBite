@@ -31,6 +31,8 @@ export interface SearchOrdersOptions {
   status?: OrderStatus;
   /** Added for the Operations Center phase (`modules/admin` frontend's `GET /kitchen/orders` filters) — see kitchen.validation.ts's doc comment on why this lives here rather than as a client-side post-filter. */
   paymentStatus?: PaymentStatus;
+  /** Added for the Payments Management phase, same shape and reasoning as `paymentStatus` above. */
+  paymentMethod?: PaymentMethod;
   dateFrom?: Date;
   dateTo?: Date;
   /** Inclusive bounds on `totalAmount`, paise. Added for the Operations Center phase alongside `paymentStatus` above. */
@@ -165,6 +167,7 @@ export class OrdersRepository {
     if (options.pickupToken) filter.pickupToken = options.pickupToken;
     if (options.status) filter.status = options.status;
     if (options.paymentStatus) filter.paymentStatus = options.paymentStatus;
+    if (options.paymentMethod) filter.paymentMethod = options.paymentMethod;
     if (options.dateFrom || options.dateTo) {
       const createdAt: Record<string, Date> = {};
       if (options.dateFrom) createdAt.$gte = options.dateFrom;

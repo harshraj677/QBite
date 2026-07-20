@@ -93,6 +93,7 @@ function makeMockOrderItemsRepository(): jest.Mocked<OrderItemsRepository> {
   return {
     createMany: jest.fn(),
     findByOrderId: jest.fn(),
+    findByOrderIds: jest.fn().mockResolvedValue([]),
     getItemSalesAggregate: jest.fn(),
     getCategoryRevenueAggregate: jest.fn(),
   } as unknown as jest.Mocked<OrderItemsRepository>;
@@ -402,6 +403,7 @@ describe('OrdersService.searchOrders', () => {
 
     await service.searchOrders({
       paymentStatus: 'paid',
+      paymentMethod: 'online',
       studentId,
       canteenId,
       minAmount: 500,
@@ -415,12 +417,89 @@ describe('OrdersService.searchOrders', () => {
     expect(ordersRepo.search).toHaveBeenCalledWith(
       expect.objectContaining({
         paymentStatus: 'paid',
+        paymentMethod: 'online',
         studentId,
         canteenId,
         minAmount: 500,
         maxAmount: 5000,
       }),
     );
+  });
+
+  // Regression coverage for the Kitchen Operations Center phase.
+  describe('includeItems', () => {
+    it('does not call findByOrderIds when includeItems is false/omitted', async () => {
+      const { service, ordersRepo, orderItemsRepo } = makeService();
+      ordersRepo.search.mockResolvedValue({ orders: [makeOrder()], total: 1 });
+
+      const result = await service.searchOrders({
+        page: 1,
+        limit: 20,
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+      });
+
+      expect(orderItemsRepo.findByOrderIds).not.toHaveBeenCalled();
+      expect(result.orders[0].items).toBeUndefined();
+    });
+
+    it('skips the items query entirely when the page is empty, even if includeItems is true', async () => {
+      const { service, ordersRepo, orderItemsRepo } = makeService();
+      ordersRepo.search.mockResolvedValue({ orders: [], total: 0 });
+
+      await service.searchOrders({
+        includeItems: true,
+        page: 1,
+        limit: 20,
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+      });
+
+      expect(orderItemsRepo.findByOrderIds).not.toHaveBeenCalled();
+    });
+
+    it('attaches items to each order, grouped correctly, when includeItems is true', async () => {
+      const { service, ordersRepo, orderItemsRepo } = makeService();
+      const orderA = makeOrder({ _id: new Types.ObjectId() });
+      const orderB = makeOrder({ _id: new Types.ObjectId() });
+      ordersRepo.search.mockResolvedValue({ orders: [orderA, orderB], total: 2 });
+      orderItemsRepo.findByOrderIds.mockResolvedValue([
+        makeOrderItem({ orderId: orderA._id, quantity: 1 }),
+        makeOrderItem({ orderId: orderA._id, quantity: 2 }),
+        makeOrderItem({ orderId: orderB._id, quantity: 3 }),
+      ]);
+
+      const result = await service.searchOrders({
+        includeItems: true,
+        page: 1,
+        limit: 20,
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+      });
+
+      expect(orderItemsRepo.findByOrderIds).toHaveBeenCalledWith([orderA._id, orderB._id]);
+      const dtoA = result.orders.find((o) => o.id === orderA._id.toString());
+      const dtoB = result.orders.find((o) => o.id === orderB._id.toString());
+      expect(dtoA?.items).toHaveLength(2);
+      expect(dtoB?.items).toHaveLength(1);
+    });
+
+    it('gives an order with no items an empty array, not undefined, when includeItems is true', async () => {
+      const { service, ordersRepo, orderItemsRepo } = makeService();
+      const order = makeOrder();
+      ordersRepo.search.mockResolvedValue({ orders: [order], total: 1 });
+      orderItemsRepo.findByOrderIds.mockResolvedValue([]);
+
+      const result = await service.searchOrders({
+        includeItems: true,
+        page: 1,
+        limit: 20,
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+      });
+
+      expect(result.orders[0].items).toEqual([]);
+    });
   });
 });
 

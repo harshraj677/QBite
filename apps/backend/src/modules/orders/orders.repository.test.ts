@@ -228,6 +228,22 @@ describe('OrdersRepository.search / findByStudent / findByCanteen', () => {
     expect(result.total).toBe(1);
   });
 
+  // Regression coverage for the Payments Management phase.
+  it('filters by paymentMethod', async () => {
+    await repository.create(makeInput({ studentId, paymentMethod: 'online' }));
+
+    const result = await repository.search({
+      studentId,
+      paymentMethod: 'online',
+      page: 1,
+      limit: 10,
+      sortBy: 'createdAt',
+      sortOrder: 'asc',
+    });
+    expect(result.total).toBe(1);
+    expect(result.orders[0].paymentMethod).toBe('online');
+  });
+
   it('filters by minAmount/maxAmount, both inclusive', async () => {
     const result = await repository.search({
       studentId,

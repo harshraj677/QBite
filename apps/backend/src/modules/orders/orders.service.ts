@@ -39,7 +39,13 @@ import {
   ORDER_TAX_RATE_PERCENT,
 } from './orders.constants';
 import type { OrderSortableField } from './orders.constants';
-import type { IOrder, OrderStatus, PaymentStatus, PublicOrderDto } from './order.types';
+import type {
+  IOrder,
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+  PublicOrderDto,
+} from './order.types';
 import { toPublicOrderDto } from './order.types';
 import type {
   CreateOrderInput,
@@ -62,7 +68,8 @@ export interface PublicOrderWithItemsDto extends PublicOrderDto {
 }
 
 export interface PublicOrderListResult {
-  orders: PublicOrderDto[];
+  /** `items` is present only when `searchOrders` was called with `includeItems: true` (see that method's doc comment) — every other caller (listMyOrders/listCanteenOrders) never sets it, so `items` stays `undefined` there exactly as before this field was added. */
+  orders: Array<PublicOrderDto & { items?: PublicOrderItemDto[] }>;
   total: number;
 }
 
@@ -343,19 +350,53 @@ export class OrdersService {
     pickupToken?: string;
     /** Added for the Operations Center phase — all five pass straight through to OrdersRepository.search(), which already carries the actual filter-building logic (see that method's doc comment for why each field lives there and not here). */
     paymentStatus?: PaymentStatus;
+    /** Added for the Payments Management phase, same shape as `paymentStatus` above. */
+    paymentMethod?: PaymentMethod;
     studentId?: string;
     canteenId?: string;
     dateFrom?: Date;
     dateTo?: Date;
     minAmount?: number;
     maxAmount?: number;
+    /**
+     * Added for the Kitchen Operations Center phase — a Kitchen
+     * Display System's cards show items without drilling into each
+     * order, so the kitchen board needs every visible order's items
+     * in one response, not N. `false`/omitted (every pre-existing
+     * caller) behaves identically to before this option existed —
+     * one extra batched `OrderItemsRepository.findByOrderIds` call,
+     * skipped entirely when there are no orders or it wasn't
+     * requested.
+     */
+    includeItems?: boolean;
     page: number;
     limit: number;
     sortBy: OrderSortableField;
     sortOrder: 'asc' | 'desc';
   }): Promise<PublicOrderListResult> {
     const result = await this.ordersRepository.search(options);
-    return { orders: result.orders.map(toPublicOrderDto), total: result.total };
+    const orders = result.orders.map(toPublicOrderDto);
+
+    if (!options.includeItems || orders.length === 0) {
+      return { orders, total: result.total };
+    }
+
+    const allItems = await this.orderItemsRepository.findByOrderIds(
+      result.orders.map((order) => order._id),
+    );
+    const itemsByOrderId = new Map<string, PublicOrderItemDto[]>();
+    for (const item of allItems) {
+      const key = item.orderId.toString();
+      const dto = toPublicOrderItemDto(item);
+      const existing = itemsByOrderId.get(key);
+      if (existing) existing.push(dto);
+      else itemsByOrderId.set(key, [dto]);
+    }
+
+    return {
+      orders: orders.map((order) => ({ ...order, items: itemsByOrderId.get(order.id) ?? [] })),
+      total: result.total,
+    };
   }
 
   async updateStatus(

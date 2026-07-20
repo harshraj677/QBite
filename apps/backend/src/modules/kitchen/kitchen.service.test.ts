@@ -19,7 +19,7 @@ function makeService(overrides: { ordersService?: jest.Mocked<OrdersService> } =
   return { service: new KitchenService(ordersService), ordersService };
 }
 
-const defaultQuery = { page: 1, limit: 20, sortOrder: 'desc' as const };
+const defaultQuery = { page: 1, limit: 20, sortOrder: 'desc' as const, includeItems: false };
 
 describe('KitchenService.listOrders', () => {
   it('delegates to OrdersService.searchOrders, always sorting by createdAt', async () => {
@@ -31,6 +31,7 @@ describe('KitchenService.listOrders', () => {
     expect(ordersService.searchOrders).toHaveBeenCalledWith({
       status: 'pending',
       paymentStatus: undefined,
+      paymentMethod: undefined,
       orderNumber: undefined,
       pickupToken: '482913',
       studentId: undefined,
@@ -39,6 +40,7 @@ describe('KitchenService.listOrders', () => {
       dateTo: undefined,
       minAmount: undefined,
       maxAmount: undefined,
+      includeItems: false,
       page: 1,
       limit: 20,
       sortBy: 'createdAt',
@@ -76,6 +78,30 @@ describe('KitchenService.listOrders', () => {
         minAmount: 500,
         maxAmount: 5000,
       }),
+    );
+  });
+
+  // Regression coverage for the Payments Management phase.
+  it('passes paymentMethod through untouched', async () => {
+    const { service, ordersService } = makeService();
+    ordersService.searchOrders.mockResolvedValue({ orders: [], total: 0 });
+
+    await service.listOrders({ ...defaultQuery, paymentMethod: 'online' });
+
+    expect(ordersService.searchOrders).toHaveBeenCalledWith(
+      expect.objectContaining({ paymentMethod: 'online' }),
+    );
+  });
+
+  // Regression coverage for the Kitchen Operations Center phase.
+  it('passes includeItems through untouched', async () => {
+    const { service, ordersService } = makeService();
+    ordersService.searchOrders.mockResolvedValue({ orders: [], total: 0 });
+
+    await service.listOrders({ ...defaultQuery, includeItems: true });
+
+    expect(ordersService.searchOrders).toHaveBeenCalledWith(
+      expect.objectContaining({ includeItems: true }),
     );
   });
 });

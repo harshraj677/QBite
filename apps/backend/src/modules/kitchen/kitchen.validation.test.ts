@@ -65,6 +65,17 @@ describe('listKitchenOrdersQuerySchema', () => {
     );
   });
 
+  // Regression coverage for the Payments Management phase's new filter.
+  it('accepts every real payment method as a filter', () => {
+    for (const paymentMethod of ['cash', 'online']) {
+      expect(listKitchenOrdersQuerySchema.safeParse({ paymentMethod }).success).toBe(true);
+    }
+  });
+
+  it('rejects an invalid paymentMethod', () => {
+    expect(listKitchenOrdersQuerySchema.safeParse({ paymentMethod: 'crypto' }).success).toBe(false);
+  });
+
   it('accepts valid studentId/canteenId ObjectIds', () => {
     const result = listKitchenOrdersQuerySchema.safeParse({
       studentId: '507f1f77bcf86cd799439011',
@@ -108,5 +119,33 @@ describe('listKitchenOrdersQuerySchema', () => {
 
   it('rejects a negative amount bound', () => {
     expect(listKitchenOrdersQuerySchema.safeParse({ minAmount: '-100' }).success).toBe(false);
+  });
+
+  // Regression coverage for the Kitchen Operations Center phase.
+  describe('includeItems', () => {
+    it('defaults to false when omitted', () => {
+      const result = listKitchenOrdersQuerySchema.safeParse({});
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.includeItems).toBe(false);
+    });
+
+    it('parses "true" as true', () => {
+      const result = listKitchenOrdersQuerySchema.safeParse({ includeItems: 'true' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.includeItems).toBe(true);
+    });
+
+    // The exact bug z.coerce.boolean() would have: Boolean("false") is
+    // true in plain JS, which would silently turn items on for a
+    // request that explicitly asked for them to stay off.
+    it('parses the literal string "false" as false, not true', () => {
+      const result = listKitchenOrdersQuerySchema.safeParse({ includeItems: 'false' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.includeItems).toBe(false);
+    });
+
+    it('rejects a non-boolean-ish value', () => {
+      expect(listKitchenOrdersQuerySchema.safeParse({ includeItems: 'yes' }).success).toBe(false);
+    });
   });
 });

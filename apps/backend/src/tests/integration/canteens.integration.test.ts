@@ -219,6 +219,14 @@ describe('GET /canteens', () => {
 
     expect(page1.body.data).toHaveLength(2);
     expect(page1.body.meta.hasMore).toBe(true);
+
+    const searched = await request(app)
+      .get('/api/v1/canteens')
+      .query({ search: 'beta' })
+      .set('Authorization', Authorization);
+
+    expect(searched.body.meta.total).toBe(1);
+    expect(searched.body.data[0].name).toBe('Beta Canteen');
   });
 
   it('rejects an out-of-range limit with 400', async () => {

@@ -67,6 +67,8 @@ export const listCanteensQuerySchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((value) => (value === undefined ? undefined : value === 'true')),
+  /** Matched against name/location — added for the Canteens Management phase's Directory search (see CanteensRepository.findAll). */
+  search: z.string().trim().min(1).optional(),
   sortBy: z.enum(['name', 'createdAt']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });

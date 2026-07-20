@@ -44,6 +44,20 @@ export class OrderItemsRepository {
   }
 
   /**
+   * Batch counterpart to `findByOrderId`, added for the Kitchen
+   * Operations Center phase (`OrdersService.searchOrders`'s
+   * `includeItems` option) — a Kitchen Display System needs every
+   * order card on the board to show its items without a per-card
+   * detail fetch, so this is one query for the whole visible board
+   * instead of N. Returned items aren't grouped by order here; the
+   * caller (`OrdersService`) does that, since "group by order" is a
+   * response-shaping concern, not a data-access one.
+   */
+  findByOrderIds(orderIds: Array<string | Types.ObjectId>): Promise<IOrderItem[]> {
+    return OrderItemModel.find({ orderId: { $in: orderIds } }).exec();
+  }
+
+  /**
    * Excludes items belonging to a `cancelled` order — a cancelled
    * order was never fulfilled, so counting its items as "sold" would
    * be misleading for Menu Analytics. `OrderItem.createdAt` isn't
