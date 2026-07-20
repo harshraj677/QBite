@@ -18,9 +18,21 @@ import {
   UnprocessableEntityError,
 } from '@errors/http-errors';
 import { OrderItemsRepository } from './order-items.repository';
+import type { CategoryRevenueStats, ItemSalesStats } from './order-items.repository';
 import type { PublicOrderItemDto } from './order-item.types';
 import { toPublicOrderItemDto } from './order-item.types';
 import { OrdersRepository } from './orders.repository';
+import type {
+  CanteenRevenue,
+  CustomerOrderStats,
+  DateRangeFilter,
+  DayOrderCount,
+  HourOrderCount,
+  MonthOrderCount,
+  RevenueBucket,
+  RevenueGranularity,
+  RevenueSummary,
+} from './orders.repository';
 import {
   CANCELLABLE_ORDER_STATUSES,
   FORWARD_TRANSITIONS,
@@ -329,6 +341,14 @@ export class OrdersService {
     status?: OrderStatus;
     orderNumber?: string;
     pickupToken?: string;
+    /** Added for the Operations Center phase — all five pass straight through to OrdersRepository.search(), which already carries the actual filter-building logic (see that method's doc comment for why each field lives there and not here). */
+    paymentStatus?: PaymentStatus;
+    studentId?: string;
+    canteenId?: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+    minAmount?: number;
+    maxAmount?: number;
     page: number;
     limit: number;
     sortBy: OrderSortableField;
@@ -476,5 +496,62 @@ export class OrdersService {
       throw new NotFoundError('ORDER_NOT_FOUND', 'Order not found.');
     }
     return toPublicOrderDto(updated);
+  }
+
+  // ---------------------------------------------------------------
+  // Analytics phase — thin, read-only delegation to
+  // OrdersRepository/OrderItemsRepository's aggregation methods.
+  // `modules/analytics` calls these (never the repositories
+  // directly) per ARCHITECTURE.md §3.1's module boundary rule; no
+  // method here adds logic beyond the pass-through itself, so the
+  // actual aggregation strategy stays in exactly one place.
+  // ---------------------------------------------------------------
+
+  getOrderStatusCounts(filter: DateRangeFilter = {}): Promise<Record<OrderStatus, number>> {
+    return this.ordersRepository.getStatusCounts(filter);
+  }
+
+  getRevenueSummary(filter: DateRangeFilter): Promise<RevenueSummary> {
+    return this.ordersRepository.getRevenueSummary(filter);
+  }
+
+  getRevenueTimeSeries(filter: {
+    from: Date;
+    to: Date;
+    granularity: RevenueGranularity;
+  }): Promise<RevenueBucket[]> {
+    return this.ordersRepository.getRevenueTimeSeries(filter);
+  }
+
+  getOrdersByDay(filter: { from: Date; to: Date }): Promise<DayOrderCount[]> {
+    return this.ordersRepository.getOrdersByDay(filter);
+  }
+
+  getOrdersByMonth(filter: { from: Date; to: Date }): Promise<MonthOrderCount[]> {
+    return this.ordersRepository.getOrdersByMonth(filter);
+  }
+
+  getPeakOrderingHours(filter: { from: Date; to: Date }): Promise<HourOrderCount[]> {
+    return this.ordersRepository.getPeakOrderingHours(filter);
+  }
+
+  getAveragePreparationTimeMinutes(filter: { from: Date; to: Date }): Promise<number | null> {
+    return this.ordersRepository.getAveragePreparationTimeMinutes(filter);
+  }
+
+  getRevenueByCanteen(filter: { from: Date; to: Date }): Promise<CanteenRevenue[]> {
+    return this.ordersRepository.getRevenueByCanteen(filter);
+  }
+
+  getCustomerOrderStats(filter: { from: Date; to: Date }): Promise<CustomerOrderStats[]> {
+    return this.ordersRepository.getCustomerOrderStats(filter);
+  }
+
+  getItemSalesAggregate(filter: { from: Date; to: Date }): Promise<ItemSalesStats[]> {
+    return this.orderItemsRepository.getItemSalesAggregate(filter);
+  }
+
+  getCategoryRevenueAggregate(filter: { from: Date; to: Date }): Promise<CategoryRevenueStats[]> {
+    return this.orderItemsRepository.getCategoryRevenueAggregate(filter);
   }
 }

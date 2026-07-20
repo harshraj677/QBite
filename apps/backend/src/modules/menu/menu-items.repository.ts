@@ -202,6 +202,11 @@ export class MenuItemsRepository {
     );
   }
 
+  /** Non-soft-deleted menu items — Analytics phase, Dashboard's "Total Menu Items" (see ARCHITECTURE.md §3.1's `modules/analytics` note). */
+  count(): Promise<number> {
+    return MenuItemModel.countDocuments({ isDeleted: false }).exec();
+  }
+
   private async runListQuery(
     filter: Record<string, unknown>,
     options: BaseListOptions,

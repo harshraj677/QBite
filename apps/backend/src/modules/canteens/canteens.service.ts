@@ -157,4 +157,18 @@ export class CanteensService {
       );
     }
   }
+
+  // ---------------------------------------------------------------
+  // Analytics phase — thin, read-only delegation. `modules/analytics`
+  // calls these (never CanteensRepository directly).
+  // ---------------------------------------------------------------
+
+  countCanteens(): Promise<number> {
+    return this.canteensRepository.count();
+  }
+
+  async findByIds(ids: string[]): Promise<PublicCanteenDto[]> {
+    const canteens = await this.canteensRepository.findByIds(ids);
+    return canteens.map(toPublicCanteenDto);
+  }
 }

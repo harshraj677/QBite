@@ -77,6 +77,15 @@ function makeMockOrdersRepository(): jest.Mocked<OrdersRepository> {
     updateStatus: jest.fn(),
     cancelOrder: jest.fn(),
     updatePaymentStatus: jest.fn(),
+    getStatusCounts: jest.fn(),
+    getRevenueSummary: jest.fn(),
+    getRevenueTimeSeries: jest.fn(),
+    getOrdersByDay: jest.fn(),
+    getOrdersByMonth: jest.fn(),
+    getPeakOrderingHours: jest.fn(),
+    getAveragePreparationTimeMinutes: jest.fn(),
+    getRevenueByCanteen: jest.fn(),
+    getCustomerOrderStats: jest.fn(),
   } as unknown as jest.Mocked<OrdersRepository>;
 }
 
@@ -84,6 +93,8 @@ function makeMockOrderItemsRepository(): jest.Mocked<OrderItemsRepository> {
   return {
     createMany: jest.fn(),
     findByOrderId: jest.fn(),
+    getItemSalesAggregate: jest.fn(),
+    getCategoryRevenueAggregate: jest.fn(),
   } as unknown as jest.Mocked<OrderItemsRepository>;
 }
 
@@ -379,6 +390,38 @@ describe('OrdersService.searchOrders', () => {
       expect.objectContaining({ pickupToken: '482913' }),
     );
   });
+
+  // Regression coverage for the Operations Center phase — these five
+  // fields are new on this method's options; asserting they reach the
+  // repository untouched is what actually matters (the repository's
+  // own tests, orders.repository.test.ts, cover the real filtering
+  // behavior — this only proves the service doesn't drop them).
+  it('passes paymentStatus/studentId/canteenId/amount-range filters through untouched', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.search.mockResolvedValue({ orders: [], total: 0 });
+
+    await service.searchOrders({
+      paymentStatus: 'paid',
+      studentId,
+      canteenId,
+      minAmount: 500,
+      maxAmount: 5000,
+      page: 1,
+      limit: 20,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    });
+
+    expect(ordersRepo.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentStatus: 'paid',
+        studentId,
+        canteenId,
+        minAmount: 500,
+        maxAmount: 5000,
+      }),
+    );
+  });
 });
 
 describe('OrdersService.updateStatus', () => {
@@ -594,5 +637,130 @@ describe('OrdersService.updatePaymentStatus', () => {
     ordersRepo.updatePaymentStatus.mockResolvedValue(null);
 
     await expect(service.updatePaymentStatus('id', 'paid')).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+// Regression coverage for the Analytics phase — every method here is
+// a pure pass-through to the repository, so each test only asserts
+// the delegation itself (no business logic exists in this layer to
+// exercise beyond that).
+describe('OrdersService analytics delegation', () => {
+  it('getOrderStatusCounts delegates to OrdersRepository.getStatusCounts', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.getStatusCounts.mockResolvedValue({
+      pending: 1,
+      accepted: 0,
+      preparing: 0,
+      ready: 0,
+      completed: 0,
+      cancelled: 0,
+    });
+
+    const result = await service.getOrderStatusCounts();
+
+    expect(ordersRepo.getStatusCounts).toHaveBeenCalled();
+    expect(result.pending).toBe(1);
+  });
+
+  it('getRevenueSummary delegates with the given filter', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.getRevenueSummary.mockResolvedValue({ revenue: 1000, orderCount: 2 });
+    const filter = { from: new Date(), to: new Date() };
+
+    const result = await service.getRevenueSummary(filter);
+
+    expect(ordersRepo.getRevenueSummary).toHaveBeenCalledWith(filter);
+    expect(result).toEqual({ revenue: 1000, orderCount: 2 });
+  });
+
+  it('getRevenueTimeSeries delegates with the given filter', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.getRevenueTimeSeries.mockResolvedValue([]);
+    const filter = { from: new Date(), to: new Date(), granularity: 'day' as const };
+
+    await service.getRevenueTimeSeries(filter);
+
+    expect(ordersRepo.getRevenueTimeSeries).toHaveBeenCalledWith(filter);
+  });
+
+  it('getOrdersByDay delegates with the given filter', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.getOrdersByDay.mockResolvedValue([]);
+    const filter = { from: new Date(), to: new Date() };
+
+    await service.getOrdersByDay(filter);
+
+    expect(ordersRepo.getOrdersByDay).toHaveBeenCalledWith(filter);
+  });
+
+  it('getOrdersByMonth delegates with the given filter', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.getOrdersByMonth.mockResolvedValue([]);
+    const filter = { from: new Date(), to: new Date() };
+
+    await service.getOrdersByMonth(filter);
+
+    expect(ordersRepo.getOrdersByMonth).toHaveBeenCalledWith(filter);
+  });
+
+  it('getPeakOrderingHours delegates with the given filter', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.getPeakOrderingHours.mockResolvedValue([]);
+    const filter = { from: new Date(), to: new Date() };
+
+    await service.getPeakOrderingHours(filter);
+
+    expect(ordersRepo.getPeakOrderingHours).toHaveBeenCalledWith(filter);
+  });
+
+  it('getAveragePreparationTimeMinutes delegates with the given filter', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.getAveragePreparationTimeMinutes.mockResolvedValue(12.5);
+    const filter = { from: new Date(), to: new Date() };
+
+    const result = await service.getAveragePreparationTimeMinutes(filter);
+
+    expect(ordersRepo.getAveragePreparationTimeMinutes).toHaveBeenCalledWith(filter);
+    expect(result).toBe(12.5);
+  });
+
+  it('getRevenueByCanteen delegates with the given filter', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.getRevenueByCanteen.mockResolvedValue([]);
+    const filter = { from: new Date(), to: new Date() };
+
+    await service.getRevenueByCanteen(filter);
+
+    expect(ordersRepo.getRevenueByCanteen).toHaveBeenCalledWith(filter);
+  });
+
+  it('getCustomerOrderStats delegates with the given filter', async () => {
+    const { service, ordersRepo } = makeService();
+    ordersRepo.getCustomerOrderStats.mockResolvedValue([]);
+    const filter = { from: new Date(), to: new Date() };
+
+    await service.getCustomerOrderStats(filter);
+
+    expect(ordersRepo.getCustomerOrderStats).toHaveBeenCalledWith(filter);
+  });
+
+  it('getItemSalesAggregate delegates to OrderItemsRepository', async () => {
+    const { service, orderItemsRepo } = makeService();
+    orderItemsRepo.getItemSalesAggregate.mockResolvedValue([]);
+    const filter = { from: new Date(), to: new Date() };
+
+    await service.getItemSalesAggregate(filter);
+
+    expect(orderItemsRepo.getItemSalesAggregate).toHaveBeenCalledWith(filter);
+  });
+
+  it('getCategoryRevenueAggregate delegates to OrderItemsRepository', async () => {
+    const { service, orderItemsRepo } = makeService();
+    orderItemsRepo.getCategoryRevenueAggregate.mockResolvedValue([]);
+    const filter = { from: new Date(), to: new Date() };
+
+    await service.getCategoryRevenueAggregate(filter);
+
+    expect(orderItemsRepo.getCategoryRevenueAggregate).toHaveBeenCalledWith(filter);
   });
 });

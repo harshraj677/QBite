@@ -30,13 +30,53 @@ describe('KitchenService.listOrders', () => {
 
     expect(ordersService.searchOrders).toHaveBeenCalledWith({
       status: 'pending',
+      paymentStatus: undefined,
       orderNumber: undefined,
       pickupToken: '482913',
+      studentId: undefined,
+      canteenId: undefined,
+      dateFrom: undefined,
+      dateTo: undefined,
+      minAmount: undefined,
+      maxAmount: undefined,
       page: 1,
       limit: 20,
       sortBy: 'createdAt',
       sortOrder: 'desc',
     });
+  });
+
+  // Regression coverage for the Operations Center phase's new filters.
+  it('passes paymentStatus/studentId/canteenId/date-range/amount-range filters through untouched', async () => {
+    const { service, ordersService } = makeService();
+    ordersService.searchOrders.mockResolvedValue({ orders: [], total: 0 });
+    const studentId = new Types.ObjectId().toString();
+    const canteenId = new Types.ObjectId().toString();
+    const dateFrom = new Date('2026-01-01');
+    const dateTo = new Date('2026-01-31');
+
+    await service.listOrders({
+      ...defaultQuery,
+      paymentStatus: 'paid',
+      studentId,
+      canteenId,
+      dateFrom,
+      dateTo,
+      minAmount: 500,
+      maxAmount: 5000,
+    });
+
+    expect(ordersService.searchOrders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentStatus: 'paid',
+        studentId,
+        canteenId,
+        dateFrom,
+        dateTo,
+        minAmount: 500,
+        maxAmount: 5000,
+      }),
+    );
   });
 });
 

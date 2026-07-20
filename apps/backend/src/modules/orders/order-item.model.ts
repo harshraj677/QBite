@@ -57,5 +57,7 @@ const orderItemSchema = new Schema<IOrderItem>(
 
 // The only query pattern this collection serves: "every line item for order X".
 orderItemSchema.index({ orderId: 1 });
+// Analytics phase — getItemSalesAggregate/getCategoryRevenueAggregate's first $match stage filters by createdAt range, before the $lookup to orders.
+orderItemSchema.index({ createdAt: -1 });
 
 export const OrderItemModel = model<IOrderItem>('OrderItem', orderItemSchema);

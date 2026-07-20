@@ -111,4 +111,14 @@ export class CanteensRepository {
       { returnDocument: 'after', updatePipeline: true },
     ).exec();
   }
+
+  /** Non-soft-deleted canteens — Analytics phase, Dashboard's "Total Canteens" (see ARCHITECTURE.md §3.1's `modules/analytics` note). */
+  count(): Promise<number> {
+    return CanteenModel.countDocuments({ isDeleted: false }).exec();
+  }
+
+  /** Batch fetch — Analytics phase, enriching a canteenId list (e.g. revenue-by-canteen) with names in one round trip. */
+  findByIds(ids: (string | Types.ObjectId)[]): Promise<ICanteen[]> {
+    return CanteenModel.find({ _id: { $in: ids }, isDeleted: false }).exec();
+  }
 }

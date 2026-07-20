@@ -293,3 +293,16 @@ describe('MenuItemsRepository.reorderItems', () => {
     expect(result.items.map((i) => i.name)).toEqual(['B', 'A']);
   });
 });
+
+// Regression coverage for the Analytics phase's read-only addition.
+describe('MenuItemsRepository.count', () => {
+  it('counts only non-soft-deleted items', async () => {
+    await repository.create(makeInput({ name: 'A', nameKey: 'a', displayOrder: 0 }));
+    const toDelete = await repository.create(
+      makeInput({ name: 'B', nameKey: 'b', displayOrder: 1 }),
+    );
+    await repository.delete(toDelete._id, new Types.ObjectId());
+
+    expect(await repository.count()).toBe(1);
+  });
+});

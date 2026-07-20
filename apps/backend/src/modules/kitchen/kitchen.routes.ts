@@ -22,7 +22,7 @@ const KITCHEN_ROLES = ['kitchen_staff', 'admin', 'super_admin'] as const;
  * /api/v1/kitchen/orders:
  *   get:
  *     summary: Kitchen dashboard — list orders across every canteen
- *     description: kitchen_staff/admin/super_admin only. Unscoped by canteen (no kitchen_staff-to-canteen assignment exists yet — see ARCHITECTURE.md §3.1). `status=pending` is the "incoming orders" view; `preparing`/`ready`/`completed` map directly to their own dashboard views.
+ *     description: kitchen_staff/admin/super_admin only. Unscoped by canteen (no kitchen_staff-to-canteen assignment exists yet — see ARCHITECTURE.md §3.1). `status=pending` is the "incoming orders" view; `preparing`/`ready`/`completed` map directly to their own dashboard views. `paymentStatus`/`studentId`/`canteenId`/`dateFrom`/`dateTo`/`minAmount`/`maxAmount` were added for the Admin Panel's Operations Center — every one is a real, server-side filter (not a client-side post-filter over one page), so any combination returns the true matching set across every canteen.
  *     tags: [Kitchen]
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -36,11 +36,34 @@ const KITCHEN_ROLES = ['kitchen_staff', 'admin', 'super_admin'] as const;
  *         name: status
  *         schema: { type: string, enum: [pending, accepted, preparing, ready, completed, cancelled] }
  *       - in: query
+ *         name: paymentStatus
+ *         schema: { type: string, enum: [pending, paid, failed, refunded] }
+ *       - in: query
  *         name: orderNumber
  *         schema: { type: string }
  *       - in: query
  *         name: pickupToken
  *         schema: { type: string, example: "482913" }
+ *       - in: query
+ *         name: studentId
+ *         schema: { type: string }
+ *       - in: query
+ *         name: canteenId
+ *         schema: { type: string }
+ *       - in: query
+ *         name: dateFrom
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: dateTo
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: minAmount
+ *         description: Inclusive lower bound on totalAmount, paise.
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: maxAmount
+ *         description: Inclusive upper bound on totalAmount, paise.
+ *         schema: { type: integer }
  *       - in: query
  *         name: sortOrder
  *         description: "asc = oldest first, desc = newest first"

@@ -33,6 +33,8 @@ function makeMockRepository(): jest.Mocked<CanteensRepository> {
     update: jest.fn(),
     delete: jest.fn(),
     toggleOpenStatus: jest.fn(),
+    count: jest.fn(),
+    findByIds: jest.fn(),
   } as unknown as jest.Mocked<CanteensRepository>;
 }
 
@@ -305,5 +307,31 @@ describe('CanteensService.toggleStatus', () => {
     const service = new CanteensService(repo);
 
     await expect(service.toggleStatus('missing-id')).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+// Regression coverage for the Analytics phase's read-only additions.
+describe('CanteensService analytics delegation', () => {
+  it('countCanteens delegates to the repository', async () => {
+    const repo = makeMockRepository();
+    repo.count.mockResolvedValue(3);
+    const service = new CanteensService(repo);
+
+    const result = await service.countCanteens();
+
+    expect(repo.count).toHaveBeenCalled();
+    expect(result).toBe(3);
+  });
+
+  it('findByIds delegates and maps to PublicCanteenDto', async () => {
+    const repo = makeMockRepository();
+    const canteen = makeCanteen();
+    repo.findByIds.mockResolvedValue([canteen]);
+    const service = new CanteensService(repo);
+
+    const result = await service.findByIds([canteen._id.toString()]);
+
+    expect(repo.findByIds).toHaveBeenCalledWith([canteen._id.toString()]);
+    expect(result).toEqual([expect.objectContaining({ id: canteen._id.toString() })]);
   });
 });

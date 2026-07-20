@@ -180,6 +180,125 @@ describe('GET /kitchen/orders', () => {
     expect(res.status).toBe(400);
   });
 
+  // Regression coverage for the Operations Center phase's new filters
+  // — real, server-side, unscoped (no canteenId path param needed),
+  // exercised over real HTTP end to end.
+  it('filters by paymentStatus', async () => {
+    const { Authorization: adminAuth } = await authHeaderFor('admin');
+    const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
+    const { Authorization: studentAuth } = await authHeaderFor('student');
+    const { canteenId, menuItemId } = await setupCanteenWithItem(adminAuth);
+    await placeOrder(studentAuth, canteenId, menuItemId);
+    await placeOrder(studentAuth, canteenId, menuItemId);
+
+    const res = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ paymentStatus: 'pending' })
+      .set('Authorization', staffAuth);
+
+    expect(res.status).toBe(200);
+    expect(res.body.meta.total).toBe(2);
+
+    const paidRes = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ paymentStatus: 'paid' })
+      .set('Authorization', staffAuth);
+    expect(paidRes.body.meta.total).toBe(0);
+  });
+
+  it('filters by studentId, unscoped across every canteen', async () => {
+    const { Authorization: adminAuth } = await authHeaderFor('admin');
+    const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
+    const { Authorization: studentAAuth, user: studentA } = await authHeaderFor('student');
+    const { Authorization: studentBAuth } = await authHeaderFor('student');
+    const canteenA = await setupCanteenWithItem(adminAuth);
+    const canteenB = await setupCanteenWithItem(adminAuth);
+    await placeOrder(studentAAuth, canteenA.canteenId, canteenA.menuItemId);
+    await placeOrder(studentBAuth, canteenB.canteenId, canteenB.menuItemId);
+
+    const res = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ studentId: studentA._id.toString() })
+      .set('Authorization', staffAuth);
+
+    expect(res.body.meta.total).toBe(1);
+  });
+
+  it('filters by canteenId', async () => {
+    const { Authorization: adminAuth } = await authHeaderFor('admin');
+    const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
+    const { Authorization: studentAuth } = await authHeaderFor('student');
+    const canteenA = await setupCanteenWithItem(adminAuth);
+    const canteenB = await setupCanteenWithItem(adminAuth);
+    await placeOrder(studentAuth, canteenA.canteenId, canteenA.menuItemId);
+    await placeOrder(studentAuth, canteenB.canteenId, canteenB.menuItemId);
+
+    const res = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ canteenId: canteenA.canteenId })
+      .set('Authorization', staffAuth);
+
+    expect(res.body.meta.total).toBe(1);
+  });
+
+  it('filters by dateFrom/dateTo', async () => {
+    const { Authorization: adminAuth } = await authHeaderFor('admin');
+    const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
+    const { Authorization: studentAuth } = await authHeaderFor('student');
+    const { canteenId, menuItemId } = await setupCanteenWithItem(adminAuth);
+    await placeOrder(studentAuth, canteenId, menuItemId);
+    const future = new Date(Date.now() + 60_000).toISOString();
+
+    const res = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ dateFrom: future })
+      .set('Authorization', staffAuth);
+
+    expect(res.body.meta.total).toBe(0);
+  });
+
+  it('rejects dateFrom after dateTo with 400', async () => {
+    const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
+
+    const res = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ dateFrom: '2026-02-01', dateTo: '2026-01-01' })
+      .set('Authorization', staffAuth);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('filters by minAmount/maxAmount, both inclusive', async () => {
+    const { Authorization: adminAuth } = await authHeaderFor('admin');
+    const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
+    const { Authorization: studentAuth } = await authHeaderFor('student');
+    const { canteenId, menuItemId, price } = await setupCanteenWithItem(adminAuth);
+    await placeOrder(studentAuth, canteenId, menuItemId);
+
+    const res = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ minAmount: price, maxAmount: price })
+      .set('Authorization', staffAuth);
+    expect(res.body.meta.total).toBe(1);
+
+    const tooHigh = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ minAmount: price + 1 })
+      .set('Authorization', staffAuth);
+    expect(tooHigh.body.meta.total).toBe(0);
+  });
+
+  it('rejects minAmount above maxAmount with 400', async () => {
+    const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');
+
+    const res = await request(app)
+      .get('/api/v1/kitchen/orders')
+      .query({ minAmount: 5000, maxAmount: 500 })
+      .set('Authorization', staffAuth);
+
+    expect(res.status).toBe(400);
+  });
+
   it('sorts oldest first / newest first', async () => {
     const { Authorization: adminAuth } = await authHeaderFor('admin');
     const { Authorization: staffAuth } = await authHeaderFor('kitchen_staff');

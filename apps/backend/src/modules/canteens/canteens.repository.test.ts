@@ -215,3 +215,29 @@ describe('CanteensRepository.toggleOpenStatus', () => {
     expect(result).toBeNull();
   });
 });
+
+// Regression coverage for the Analytics phase's read-only additions.
+describe('CanteensRepository.count', () => {
+  it('counts only non-soft-deleted canteens', async () => {
+    await repository.create(makeInput());
+    const toDelete = await repository.create(makeInput({ name: 'Second', nameKey: 'second' }));
+    await repository.delete(toDelete._id, new Types.ObjectId());
+
+    expect(await repository.count()).toBe(1);
+  });
+});
+
+describe('CanteensRepository.findByIds', () => {
+  it('batch-fetches by id, excluding soft-deleted ones', async () => {
+    const a = await repository.create(makeInput());
+    const b = await repository.create(makeInput({ name: 'Second', nameKey: 'second' }));
+    const deleted = await repository.create(makeInput({ name: 'Third', nameKey: 'third' }));
+    await repository.delete(deleted._id, new Types.ObjectId());
+
+    const found = await repository.findByIds([a._id, b._id, deleted._id]);
+
+    expect(found.map((c) => c._id.toString()).sort()).toEqual(
+      [a._id.toString(), b._id.toString()].sort(),
+    );
+  });
+});

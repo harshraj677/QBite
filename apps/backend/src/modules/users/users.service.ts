@@ -2,7 +2,7 @@ import type { Types } from 'mongoose';
 
 import type { CreateUserInput } from './users.repository';
 import { UsersRepository } from './users.repository';
-import type { IUser } from './user.types';
+import type { IUser, UserRole } from './user.types';
 
 /**
  * `users` module's public interface. Per ARCHITECTURE.md §3.1's
@@ -71,5 +71,22 @@ export class UsersService {
 
   updateLastLoginAt(id: string | Types.ObjectId): Promise<void> {
     return this.usersRepository.updateLastLoginAt(id);
+  }
+
+  // ---------------------------------------------------------------
+  // Analytics phase — thin, read-only delegation. `modules/analytics`
+  // calls these (never UsersRepository directly).
+  // ---------------------------------------------------------------
+
+  getRoleCounts(): Promise<Record<UserRole, number>> {
+    return this.usersRepository.getRoleCounts();
+  }
+
+  countNewUsers(filter: { from: Date; to: Date }): Promise<number> {
+    return this.usersRepository.countNewUsers(filter);
+  }
+
+  findByIds(ids: (string | Types.ObjectId)[]): Promise<IUser[]> {
+    return this.usersRepository.findByIds(ids);
   }
 }

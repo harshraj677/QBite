@@ -44,8 +44,15 @@ export class KitchenService {
   async listOrders(query: ListKitchenOrdersQuery): Promise<PublicOrderListResult> {
     return this.ordersService.searchOrders({
       status: query.status,
+      paymentStatus: query.paymentStatus,
       orderNumber: query.orderNumber,
       pickupToken: query.pickupToken,
+      studentId: query.studentId,
+      canteenId: query.canteenId,
+      dateFrom: query.dateFrom,
+      dateTo: query.dateTo,
+      minAmount: query.minAmount,
+      maxAmount: query.maxAmount,
       page: query.page,
       limit: query.limit,
       sortBy: 'createdAt',

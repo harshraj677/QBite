@@ -51,4 +51,62 @@ describe('listKitchenOrdersQuerySchema', () => {
       expect((result.data as Record<string, unknown>).sortBy).toBeUndefined();
     }
   });
+
+  // Regression coverage for the Operations Center phase's new filters.
+  it('accepts every real payment status as a filter', () => {
+    for (const paymentStatus of ['pending', 'paid', 'failed', 'refunded']) {
+      expect(listKitchenOrdersQuerySchema.safeParse({ paymentStatus }).success).toBe(true);
+    }
+  });
+
+  it('rejects an invalid paymentStatus', () => {
+    expect(listKitchenOrdersQuerySchema.safeParse({ paymentStatus: 'chargeback' }).success).toBe(
+      false,
+    );
+  });
+
+  it('accepts valid studentId/canteenId ObjectIds', () => {
+    const result = listKitchenOrdersQuerySchema.safeParse({
+      studentId: '507f1f77bcf86cd799439011',
+      canteenId: '507f1f77bcf86cd799439012',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a malformed studentId/canteenId', () => {
+    expect(listKitchenOrdersQuerySchema.safeParse({ studentId: 'nope' }).success).toBe(false);
+    expect(listKitchenOrdersQuerySchema.safeParse({ canteenId: 'nope' }).success).toBe(false);
+  });
+
+  it('accepts a valid dateFrom/dateTo range', () => {
+    const result = listKitchenOrdersQuerySchema.safeParse({
+      dateFrom: '2026-01-01',
+      dateTo: '2026-01-31',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects dateFrom after dateTo', () => {
+    const result = listKitchenOrdersQuerySchema.safeParse({
+      dateFrom: '2026-02-01',
+      dateTo: '2026-01-01',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a valid minAmount/maxAmount range', () => {
+    expect(
+      listKitchenOrdersQuerySchema.safeParse({ minAmount: '500', maxAmount: '5000' }).success,
+    ).toBe(true);
+  });
+
+  it('rejects minAmount above maxAmount', () => {
+    expect(
+      listKitchenOrdersQuerySchema.safeParse({ minAmount: '5000', maxAmount: '500' }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a negative amount bound', () => {
+    expect(listKitchenOrdersQuerySchema.safeParse({ minAmount: '-100' }).success).toBe(false);
+  });
 });

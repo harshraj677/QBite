@@ -379,4 +379,9 @@ export class MenuItemsService {
     });
     return items.length > 0 ? items[0].displayOrder + 1 : 0;
   }
+
+  /** Analytics phase — read-only delegation, Dashboard's "Total Menu Items" (see ARCHITECTURE.md §3.1's `modules/analytics` note). */
+  countItems(): Promise<number> {
+    return this.itemsRepository.count();
+  }
 }

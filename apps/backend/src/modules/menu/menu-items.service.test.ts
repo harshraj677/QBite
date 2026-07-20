@@ -67,6 +67,7 @@ function makeMockItemsRepository(): jest.Mocked<MenuItemsRepository> {
     updateAvailability: jest.fn(),
     updateFeatured: jest.fn(),
     reorderItems: jest.fn(),
+    count: jest.fn(),
   } as unknown as jest.Mocked<MenuItemsRepository>;
 }
 
@@ -331,5 +332,18 @@ describe('MenuItemsService.reorderItem', () => {
       { id: sibling._id, displayOrder: 0 },
       { id: target._id, displayOrder: 1 },
     ]);
+  });
+});
+
+// Regression coverage for the Analytics phase's read-only addition.
+describe('MenuItemsService.countItems', () => {
+  it('delegates to the repository', async () => {
+    const { service, itemsRepo } = makeService();
+    itemsRepo.count.mockResolvedValue(42);
+
+    const result = await service.countItems();
+
+    expect(itemsRepo.count).toHaveBeenCalled();
+    expect(result).toBe(42);
   });
 });

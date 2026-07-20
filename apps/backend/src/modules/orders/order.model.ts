@@ -96,5 +96,9 @@ const orderSchema = new Schema<IOrder>(
 orderSchema.index({ studentId: 1, createdAt: -1 });
 // A canteen's orders filtered by status (the kitchen queue view) — GET /canteens/:canteenId/orders.
 orderSchema.index({ canteenId: 1, status: 1, createdAt: -1 });
+// Analytics phase — revenue queries always $match `{paymentStatus: 'paid', createdAt: {...}}` (getRevenueSummary/getRevenueTimeSeries/getRevenueByCanteen); neither index above has paymentStatus as a leading key, so without this one those aggregations would collection-scan.
+orderSchema.index({ paymentStatus: 1, createdAt: -1 });
+// Analytics phase — every date-range-only aggregation with no other equality filter (getStatusCounts, getOrdersByDay/Month, getPeakOrderingHours, getAveragePreparationTimeMinutes, getCustomerOrderStats) needs createdAt as a leading key on its own; the compound indexes above only help when studentId/canteenId is also filtered.
+orderSchema.index({ createdAt: -1 });
 
 export const OrderModel = model<IOrder>('Order', orderSchema);

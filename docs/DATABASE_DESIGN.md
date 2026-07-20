@@ -339,7 +339,7 @@ No soft-delete fields and no `createdBy` — deliberate. The phase spec requires
 | `cancelledAt` / `cancellationReason` | Date? / String? | Stamped by `PATCH /orders/:id/cancel`. |
 | `createdAt` / `updatedAt` | Date | |
 
-**Indexes:** `{studentId, createdAt: -1}` (a student's own order history — `GET /students/me/orders`); `{canteenId, status, createdAt: -1}` (the kitchen queue view, filterable by status — `GET /canteens/:canteenId/orders`); `orderNumber` unique; `pickupToken` unique.
+**Indexes:** `{studentId, createdAt: -1}` (a student's own order history — `GET /students/me/orders`); `{canteenId, status, createdAt: -1}` (the kitchen queue view, filterable by status — `GET /canteens/:canteenId/orders`); `orderNumber` unique; `pickupToken` unique. **Analytics phase:** `{paymentStatus: 1, createdAt: -1}` (every revenue aggregation `$match`es exactly this pair — see §2.21); `{createdAt: -1}` alone (every date-range-only aggregation with no other equality filter — status/day/month/hour/prep-time/customer-stats — since neither compound index above has `createdAt` as a leading key on its own).
 
 ### 2.18 `order_items`
 
@@ -358,7 +358,7 @@ The single most important field is `itemSnapshot` — frozen at order-creation t
 | `itemSnapshot.itemId` / `.itemName` / `.categoryName` / `.image` / `.unitPrice` / `.isVeg` | Embedded, `_id: false` | The frozen copy — see above. |
 | `createdAt` / `updatedAt` | Date | |
 
-**Indexes:** `{orderId}` — the only query pattern this collection serves is "every line item for order X".
+**Indexes:** `{orderId}` (the only query pattern this collection served *before* the Analytics phase: "every line item for order X"). **Analytics phase:** `{createdAt: -1}` — `getItemSalesAggregate`/`getCategoryRevenueAggregate`'s first `$match` stage, before their `$lookup` to `orders` (see §2.21).
 
 ### 2.19 `notifications`
 
@@ -405,6 +405,12 @@ Never soft-deleted — same rationale as `orders`/`order_items`: a payment recor
 | `createdAt` / `updatedAt` | Date | |
 
 **Indexes:** `{razorpayOrderId}`; `{razorpayPaymentId}`; `{orderId, createdAt: -1}` (every attempt for an order, most recent first — `PaymentsRepository.findByOrderId`). **`{orderId: 1, status: 1}`, unique, partial (`status: 'SUCCESS'`)** — the actual database-level guarantee behind "each order can have only one successful payment"; a service-layer pre-check (`existsSuccessForOrder`) exists only for a faster, clearer error message before this index would reject the write (see [ARCHITECTURE.md §3.1](./ARCHITECTURE.md#31-pattern-modular-monolith)'s `modules/payments` note).
+
+### 2.21 `modules/analytics` owns no collection
+
+Deliberately absent from this list, not an oversight — the Analytics phase (`GET /analytics/*`) is read-only and computes every number from the six collections already documented above (`orders`, `order_items`, `users`, `canteens`, `menu_items`, and indirectly `payments` via `orders.paymentStatus`), via new aggregation-pipeline methods added to those collections' own repositories. See [ARCHITECTURE.md §3.1](./ARCHITECTURE.md#31-pattern-modular-monolith)'s `modules/analytics` note for why no `analytics` collection, model, or repository exists.
+
+This phase *did* need two new indexes, since none of `orders`' pre-existing compound indexes (`{studentId, createdAt}`, `{canteenId, status, createdAt}`) have `createdAt` or `paymentStatus` as a leading key on their own — see §2.17's and §2.18's now-updated **Indexes:** lines for the specifics (`{paymentStatus, createdAt}` and a standalone `{createdAt}` on `orders`; a standalone `{createdAt}` on `order_items`).
 
 ---
 

@@ -2,6 +2,7 @@ import type { Types } from 'mongoose';
 
 import { UserModel } from './user.model';
 import type { IUser, UserRole } from './user.types';
+import { USER_ROLES } from './user.types';
 
 export interface CreateUserInput {
   usn?: string;
@@ -102,5 +103,33 @@ export class UsersRepository {
 
   async updateLastLoginAt(id: string | Types.ObjectId): Promise<void> {
     await UserModel.updateOne({ _id: id }, { $set: { lastLoginAt: new Date() } }).exec();
+  }
+
+  // ---------------------------------------------------------------
+  // Analytics phase — read-only. Added for `modules/analytics` (see
+  // ARCHITECTURE.md §3.1's note).
+  // ---------------------------------------------------------------
+
+  /** Every role, zero-filled even when a role has no users — Dashboard's Total Students/Total Staff derive from this (see AnalyticsService for the student-vs-staff grouping). */
+  async getRoleCounts(): Promise<Record<UserRole, number>> {
+    const rows = await UserModel.aggregate<{ _id: UserRole; count: number }>([
+      { $group: { _id: '$role', count: { $sum: 1 } } },
+    ]);
+    const counts = Object.fromEntries(USER_ROLES.map((role) => [role, 0])) as Record<
+      UserRole,
+      number
+    >;
+    for (const row of rows) counts[row._id] = row.count;
+    return counts;
+  }
+
+  /** Registered within the given window — User Analytics' "New Users". */
+  countNewUsers(filter: { from: Date; to: Date }): Promise<number> {
+    return UserModel.countDocuments({ createdAt: { $gte: filter.from, $lte: filter.to } }).exec();
+  }
+
+  /** Batch fetch for enriching an id list (e.g. top customers) with names/emails in one round trip instead of N — see ARCHITECTURE.md's `modules/analytics` note on avoiding N+1 queries. */
+  findByIds(ids: (string | Types.ObjectId)[]): Promise<IUser[]> {
+    return UserModel.find({ _id: { $in: ids } }).exec();
   }
 }
